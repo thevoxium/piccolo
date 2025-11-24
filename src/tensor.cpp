@@ -97,6 +97,60 @@ Tensor* tensor_create(int ndim, int* shape) {
     return t;
 }
 
+
+Tensor* tensor_ones(int ndim, int* shape) {
+    Tensor* t = tensor_create(ndim, shape);
+    if(t == NULL) {
+        return NULL;
+    }
+    
+    for(int i = 0; i < t->capacity; i++) {
+        t->data[i] = 1.0f;
+    }
+    
+    return t;
+}
+
+Tensor* tensor_zeroes(int ndim, int* shape) {
+    Tensor* t = tensor_create(ndim, shape);
+    if(t == NULL) {
+        return NULL;
+    }
+    
+    memset(t->data, 0, t->capacity * sizeof(float));
+    
+    return t;
+}
+
+Tensor* tensor_random(int ndim, int* shape) {
+    Tensor* t = tensor_create(ndim, shape);
+    if(t == NULL) {
+        return NULL;
+    }
+    
+    for(int i = 0; i < t->capacity; i++) {
+        t->data[i] = (float)rand() / (float)RAND_MAX;
+    }
+    
+    return t;
+}
+
+Tensor* tensor_from_data(int ndim, int* shape, float* data) {
+    if(data == NULL) {
+        fprintf(stderr, "Error: data array is NULL\n");
+        return NULL;
+    }
+    
+    Tensor* t = tensor_create(ndim, shape);
+    if(t == NULL) {
+        return NULL;
+    }
+    
+    memcpy(t->data, data, t->capacity * sizeof(float));
+    
+    return t;
+}
+
 void tensor_free(Tensor* t) {
     if(t == NULL) {
         return;

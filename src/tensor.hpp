@@ -20,4 +20,11 @@ Tensor* tensor_create(int ndim, int* shape);
 void tensor_free(Tensor* t);
 std::ostream &operator<<(std::ostream &os, const Tensor &t);
 
+Tensor* tensor_ones(int ndim, int* shape);
+Tensor* tensor_zeroes(int ndim, int* shape);
+Tensor* tensor_random(int ndim, int* shape);
+Tensor* tensor_from_data(int ndim, int* shape, float* data);
+
+
+
 #endif

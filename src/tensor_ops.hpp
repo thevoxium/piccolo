@@ -3,6 +3,7 @@
 #include "tensor.hpp"
 
 
-Tensor* tensor_add(const Tensor* a, const Tensor* b);
+Tensor* tensor_add(Tensor* a, Tensor* b);
+
 
 #endif
