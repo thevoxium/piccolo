@@ -1,6 +1,10 @@
 # Compiler and flags
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -I.
+OPENBLAS_DIR ?= /opt/homebrew/opt/openblas
+CXXFLAGS += -I$(OPENBLAS_DIR)/include
+LDFLAGS += -L$(OPENBLAS_DIR)/lib
+LDLIBS += -lopenblas
 TARGET = piccolo
 
 # Source directories
@@ -33,7 +37,7 @@ $(MAIN_OBJ): $(MAIN_FILE) | $(OBJ_DIR)
 
 # Link all object files into executable
 $(TARGET): $(ALL_OBJ)
-	$(CXX) $(ALL_OBJ) -o $(TARGET)
+	$(CXX) $(ALL_OBJ) $(LDFLAGS) -o $(TARGET) $(LDLIBS)
 
 # Run target - cleans and rebuilds, then runs
 run: clean $(TARGET)
@@ -47,7 +51,7 @@ TEST_OBJ = $(OBJ_DIR)/test_all.o
 
 # Test executable
 $(TEST_TARGET): $(TEST_OBJ) $(OBJ_FILES)
-	$(CXX) $(TEST_OBJ) $(OBJ_FILES) -o $(TEST_TARGET)
+	$(CXX) $(TEST_OBJ) $(OBJ_FILES) $(LDFLAGS) -o $(TEST_TARGET) $(LDLIBS)
 
 # Compile test file
 $(TEST_OBJ): $(TEST_FILE) | $(OBJ_DIR)

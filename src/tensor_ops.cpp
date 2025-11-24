@@ -1,6 +1,15 @@
 #include "tensor_ops.hpp"
 #include <stdio.h>
 #include <math.h>
+#if __has_include(<cblas.h>)
+extern "C" {
+#include <cblas.h>
+}
+#elif __has_include(<Accelerate/Accelerate.h>)
+#include <Accelerate/Accelerate.h>
+#else
+#error "cblas interface not available"
+#endif
 
 static Tensor* tensor_unary_result(Tensor* a, const char* op_name){
     if(a == NULL){
@@ -174,6 +183,77 @@ Tensor* tensor_dot(Tensor* a, Tensor* b){
             b->grad[i] += a->data[i] * grad_val;
         }
     };
+    return result;
+}
+
+Tensor* tensor_mm(Tensor* a, Tensor* b){
+    if(a == NULL || b == NULL){
+        fprintf(stderr, "Error (tensor_mm): Tensor is NULL\n");
+        return NULL;
+    }
+    if(a->ndim != 2 || b->ndim != 2){
+        fprintf(stderr, "Error (tensor_mm): Both tensors must be 2D\n");
+        return NULL;
+    }
+    if(a->shape[1] != b->shape[0]){
+        fprintf(stderr, "Error (tensor_mm): Incompatible shapes (%d, %d) x (%d, %d)\n",
+                a->shape[0], a->shape[1], b->shape[0], b->shape[1]);
+        return NULL;
+    }
+    if(a->data == NULL || b->data == NULL || a->grad == NULL || b->grad == NULL){
+        fprintf(stderr, "Error (tensor_mm): Tensor data or grad arrays are NULL\n");
+        return NULL;
+    }
+
+    const int m = a->shape[0];
+    const int k = a->shape[1];
+    const int n = b->shape[1];
+
+    int result_shape[2] = {m, n};
+    Tensor* result = tensor_create(2, result_shape);
+    if(result == NULL){
+        fprintf(stderr, "Error (tensor_mm): Failed to create result tensor\n");
+        return NULL;
+    }
+
+    cblas_sgemm(CblasRowMajor,
+                CblasNoTrans,
+                CblasNoTrans,
+                m, n, k,
+                1.0f,
+                a->data, k,
+                b->data, n,
+                0.0f,
+                result->data, n);
+
+    result->_parents[0] = a;
+    result->_parents[1] = b;
+
+    result->_backward = [=](){
+        if(a->grad != NULL){
+            cblas_sgemm(CblasRowMajor,
+                        CblasNoTrans,
+                        CblasTrans,
+                        m, k, n,
+                        1.0f,
+                        result->grad, n,
+                        b->data, n,
+                        1.0f,
+                        a->grad, k);
+        }
+        if(b->grad != NULL){
+            cblas_sgemm(CblasRowMajor,
+                        CblasTrans,
+                        CblasNoTrans,
+                        k, n, m,
+                        1.0f,
+                        a->data, k,
+                        result->grad, n,
+                        1.0f,
+                        b->grad, n);
+        }
+    };
+
     return result;
 }
 

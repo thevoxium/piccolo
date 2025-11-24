@@ -5,10 +5,11 @@
 #include <cstdio>
 
 int main() {
-    // Create two tensors with shape [2, 2] filled with random values
-    int shape[] = {2, 2};
-    Tensor* a = tensor_random(2, shape);
-    Tensor* b = tensor_random(2, shape);
+    // Multiply two compatible matrices using BLAS-backed tensor_mm
+    int shape_a[] = {2, 3};
+    int shape_b[] = {3, 2};
+    Tensor* a = tensor_random(2, shape_a);
+    Tensor* b = tensor_random(2, shape_b);
     
     if (a == NULL || b == NULL) {
         std::cerr << "Error: Failed to create tensors" << std::endl;
@@ -17,11 +18,10 @@ int main() {
         return 1;
     }
     
-    // Add the tensors
-    Tensor* result = tensor_sub(a, b);
+    Tensor* result = tensor_mm(a, b);
     
     if (result == NULL) {
-        std::cerr << "Error: tensor_sub failed" << std::endl;
+        std::cerr << "Error: tensor_mm failed" << std::endl;
         tensor_free(a);
         tensor_free(b);
         return 1;
@@ -29,39 +29,25 @@ int main() {
     
     std::cout << "Tensor a: " << *a << std::endl;
     std::cout << "Tensor b: " << *b << std::endl;
-    std::cout << "Result (a - b): " << *result << std::endl;
+    std::cout << "Result (a mm b): " << *result << std::endl;
     
-    // Compute gradients
+    // Compute gradients through the matmul
     backward(result);
     
-    // Print gradients
+    auto print_grad = [](const char* label, Tensor* t) {
+        if (t == NULL || t->grad == NULL) return;
+        std::cout << label << ": [";
+        for (int i = 0; i < t->capacity; i++) {
+            std::cout << t->grad[i];
+            if (i < t->capacity - 1) std::cout << ", ";
+        }
+        std::cout << "]" << std::endl;
+    };
+    
     std::cout << "\nGradients:" << std::endl;
-    if (result->grad != NULL) {
-        std::cout << "Result grad: [";
-        for (int i = 0; i < result->capacity; i++) {
-            std::cout << result->grad[i];
-            if (i < result->capacity - 1) std::cout << ", ";
-        }
-        std::cout << "]" << std::endl;
-    }
-    
-    if (a->grad != NULL) {
-        std::cout << "Tensor a grad: [";
-        for (int i = 0; i < a->capacity; i++) {
-            std::cout << a->grad[i];
-            if (i < a->capacity - 1) std::cout << ", ";
-        }
-        std::cout << "]" << std::endl;
-    }
-    
-    if (b->grad != NULL) {
-        std::cout << "Tensor b grad: [";
-        for (int i = 0; i < b->capacity; i++) {
-            std::cout << b->grad[i];
-            if (i < b->capacity - 1) std::cout << ", ";
-        }
-        std::cout << "]" << std::endl;
-    }
+    print_grad("Result grad", result);
+    print_grad("Tensor a grad", a);
+    print_grad("Tensor b grad", b);
     
     // Clean up
     tensor_free(result);
