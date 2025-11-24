@@ -35,14 +35,32 @@ $(MAIN_OBJ): $(MAIN_FILE) | $(OBJ_DIR)
 $(TARGET): $(ALL_OBJ)
 	$(CXX) $(ALL_OBJ) -o $(TARGET)
 
-# Clean target - removes binaries and build directory
-clean:
-	rm -rf $(OBJ_DIR) $(TARGET)
-
 # Run target - cleans and rebuilds, then runs
 run: clean $(TARGET)
 	./$(TARGET)
 
+# Test files
+TEST_DIR = tests
+TEST_TARGET = test_runner
+TEST_FILE = $(TEST_DIR)/test_all.cpp
+TEST_OBJ = $(OBJ_DIR)/test_all.o
+
+# Test executable
+$(TEST_TARGET): $(TEST_OBJ) $(OBJ_FILES)
+	$(CXX) $(TEST_OBJ) $(OBJ_FILES) -o $(TEST_TARGET)
+
+# Compile test file
+$(TEST_OBJ): $(TEST_FILE) | $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Run tests
+test: $(TEST_TARGET)
+	./$(TEST_TARGET)
+
+# Clean target - removes binaries and build directory
+clean:
+	rm -rf $(OBJ_DIR) $(TARGET) $(TEST_TARGET)
+
 # Phony targets
-.PHONY: all clean run
+.PHONY: all clean run test
 

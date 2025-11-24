@@ -11,7 +11,7 @@ int main() {
     Tensor* b = tensor_random(2, shape);
     
     // Add the tensors
-    Tensor* result = tensor_add(a, b);
+    Tensor* result = tensor_sub(a, b);
     
     if (result == NULL) {
         std::cerr << "Error: tensor_add failed" << std::endl;
@@ -20,7 +20,7 @@ int main() {
     
     std::cout << "Tensor a: " << *a << std::endl;
     std::cout << "Tensor b: " << *b << std::endl;
-    std::cout << "Result (a + b): " << *result << std::endl;
+    std::cout << "Result (a - b): " << *result << std::endl;
     
     // Compute gradients
     backward(result);
