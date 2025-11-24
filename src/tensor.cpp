@@ -1,0 +1,81 @@
+#include "tensor.h"
+
+Tensor* tensor_create(int ndim, int* shape) {
+    if(ndim <= 0 || shape == NULL) {
+        fprintf(stderr, "Error: Check the input parameters, ndim: %d, shape: %p", ndim, shape);
+        return NULL;
+    }
+    
+    for(int i = 0; i < ndim; i++) {
+        if(shape[i] <= 0) {
+            fprintf(stderr, "Error: shape[%d] must be positive, got %d\n", i, shape[i]);
+            return NULL;
+        }
+    }
+    
+    // Calculate capacity from shapes
+    int capacity = 1;
+    for(int i = 0; i < ndim; i++) {
+        capacity *= shape[i];
+    }
+    
+    Tensor* t = (Tensor*)malloc(sizeof(Tensor));
+    if(t == NULL) {
+        fprintf(stderr, "Error: Failed to allocate memory for Tensor\n");
+        return NULL;
+    }
+    
+    t->data = (float*)malloc(capacity * sizeof(float));
+    if(t->data == NULL) {
+        fprintf(stderr, "Error: Failed to allocate memory for data\n");
+        free(t);
+        return NULL;
+    }
+    
+    // Allocate and copy the shape array
+    t->shape = (int*)malloc(ndim * sizeof(int));
+    if(t->shape == NULL) {
+        fprintf(stderr, "Error: Failed to allocate memory for shape\n");
+        free(t->data);
+        free(t);
+        return NULL;
+    }
+    memcpy(t->shape, shape, ndim * sizeof(int));
+    
+    // Allocate and calculate strides (row-major order)
+    t->strides = (int*)malloc(ndim * sizeof(int));
+    if(t->strides == NULL) {
+        fprintf(stderr, "Error: Failed to allocate memory for strides\n");
+        free(t->shape);
+        free(t->data);
+        free(t);
+        return NULL;
+    }
+    
+    // Calculate strides: stride[i] = product of shape[i+1] to shape[ndim-1]
+    // For row-major order, last dimension has stride 1
+    t->strides[ndim - 1] = 1;
+    for(int i = ndim - 2; i >= 0; i--) {
+        t->strides[i] = t->strides[i + 1] * shape[i + 1];
+    }
+    
+    t->ndim = ndim;
+    t->capacity = capacity;
+    return t;
+}
+
+void tensor_free(Tensor* t) {
+    if(t == NULL) {
+        return;
+    }
+    if(t->data != NULL) {
+        free(t->data);
+    }
+    if(t->shape != NULL) {
+        free(t->shape);
+    }
+    if(t->strides != NULL) {
+        free(t->strides);
+    }
+    free(t);
+}

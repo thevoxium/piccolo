@@ -1,0 +1,48 @@
+# Compiler and flags
+CXX = g++
+CXXFLAGS = -std=c++17 -Wall -Wextra -I.
+TARGET = piccolo
+
+# Source directories
+SRC_DIR = src
+SRC_FILES = $(wildcard $(SRC_DIR)/*.cpp)
+MAIN_FILE = main.cpp
+
+# Object files
+OBJ_DIR = build
+OBJ_FILES = $(SRC_FILES:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
+MAIN_OBJ = $(OBJ_DIR)/main.o
+
+# All object files
+ALL_OBJ = $(MAIN_OBJ) $(OBJ_FILES)
+
+# Default target
+all: $(TARGET)
+
+# Create build directory if it doesn't exist
+$(OBJ_DIR):
+	mkdir -p $(OBJ_DIR)
+
+# Compile source files from src/
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compile main.cpp
+$(MAIN_OBJ): $(MAIN_FILE) | $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Link all object files into executable
+$(TARGET): $(ALL_OBJ)
+	$(CXX) $(ALL_OBJ) -o $(TARGET)
+
+# Clean target - removes binaries and build directory
+clean:
+	rm -rf $(OBJ_DIR) $(TARGET)
+
+# Run target - cleans and rebuilds, then runs
+run: clean $(TARGET)
+	./$(TARGET)
+
+# Phony targets
+.PHONY: all clean run
+
