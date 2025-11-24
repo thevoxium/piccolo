@@ -1,5 +1,25 @@
 #include "tensor_ops.hpp"
 #include <stdio.h>
+#include <math.h>
+
+static Tensor* tensor_unary_result(Tensor* a, const char* op_name){
+    if(a == NULL){
+        fprintf(stderr, "Error (%s): Tensor is NULL\n", op_name);
+        return NULL;
+    }
+    if(a->data == NULL || a->grad == NULL){
+        fprintf(stderr, "Error (%s): Tensor data or grad arrays are NULL\n", op_name);
+        return NULL;
+    }
+    Tensor* result = tensor_create(a->ndim, a->shape);
+    if(result == NULL){
+        fprintf(stderr, "Error (%s): Failed to create result tensor\n", op_name);
+        return NULL;
+    }
+    result->_parents[0] = (Tensor*)a;
+    result->_parents[1] = NULL;
+    return result;
+}
 
 Tensor* tensor_add(Tensor* a, Tensor* b){
     if(a == NULL || b == NULL){
@@ -152,6 +172,342 @@ Tensor* tensor_dot(Tensor* a, Tensor* b){
         for (int i=0; i < a->capacity; i++){
             a->grad[i] += b->data[i] * grad_val;
             b->grad[i] += a->data[i] * grad_val;
+        }
+    };
+    return result;
+}
+
+Tensor* tensor_neg(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_neg");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        result->data[i] = -a->data[i];
+    }
+    result->_backward = [=](){
+        for(int i = 0; i < a->capacity; i++){
+            a->grad[i] -= result->grad[i];
+        }
+    };
+    return result;
+}
+
+Tensor* tensor_log2(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_log2");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        float val = a->data[i];
+        if(val <= 0.0f){
+            fprintf(stderr, "Warning (tensor_log2): log2 undefined for non-positive values, got %f\n", val);
+            result->data[i] = -INFINITY;
+        }else{
+            result->data[i] = log2f(val);
+        }
+    }
+    const float ln2 = logf(2.0f);
+    result->_backward = [=](){
+        for(int i = 0; i < a->capacity; i++){
+            float val = a->data[i];
+            if(val <= 0.0f){
+                continue;
+            }
+            a->grad[i] += result->grad[i] / (val * ln2);
+        }
+    };
+    return result;
+}
+
+Tensor* tensor_exp2(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_exp2");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        result->data[i] = exp2f(a->data[i]);
+    }
+    const float ln2 = logf(2.0f);
+    result->_backward = [=](){
+        for(int i = 0; i < a->capacity; i++){
+            a->grad[i] += result->grad[i] * result->data[i] * ln2;
+        }
+    };
+    return result;
+}
+
+Tensor* tensor_sqrt(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_sqrt");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        float val = a->data[i];
+        if(val < 0.0f){
+            fprintf(stderr, "Warning (tensor_sqrt): sqrt undefined for negative values, got %f\n", val);
+            result->data[i] = NAN;
+        } else {
+            result->data[i] = sqrtf(val);
+        }
+    }
+    result->_backward = [=](){
+        for(int i = 0; i < a->capacity; i++){
+            float val = a->data[i];
+            if(val <= 0.0f || result->data[i] == 0.0f){
+                continue;
+            }
+            float local_grad = 0.5f / result->data[i];
+            a->grad[i] += result->grad[i] * local_grad;
+        }
+    };
+    return result;
+}
+
+Tensor* tensor_sin(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_sin");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        result->data[i] = sinf(a->data[i]);
+    }
+    result->_backward = [=](){
+        for(int i = 0; i < a->capacity; i++){
+            a->grad[i] += result->grad[i] * cosf(a->data[i]);
+        }
+    };
+    return result;
+}
+
+Tensor* tensor_cos(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_cos");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        result->data[i] = cosf(a->data[i]);
+    }
+    result->_backward = [=](){
+        for(int i = 0; i < a->capacity; i++){
+            a->grad[i] -= result->grad[i] * sinf(a->data[i]);
+        }
+    };
+    return result;
+}
+
+Tensor* tensor_tan(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_tan");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        result->data[i] = tanf(a->data[i]);
+    }
+    result->_backward = [=](){
+        for(int i = 0; i < a->capacity; i++){
+            float tangent = result->data[i];
+            a->grad[i] += result->grad[i] * (1.0f + tangent * tangent);
+        }
+    };
+    return result;
+}
+
+Tensor* tensor_trunc(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_trunc");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        result->data[i] = truncf(a->data[i]);
+    }
+    result->_backward = [](){};
+    return result;
+}
+
+Tensor* tensor_ceil(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_ceil");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        result->data[i] = ceilf(a->data[i]);
+    }
+    result->_backward = [](){};
+    return result;
+}
+
+Tensor* tensor_floor(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_floor");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        result->data[i] = floorf(a->data[i]);
+    }
+    result->_backward = [](){};
+    return result;
+}
+
+Tensor* tensor_round(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_round");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        result->data[i] = roundf(a->data[i]);
+    }
+    result->_backward = [](){};
+    return result;
+}
+
+Tensor* tensor_square(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_square");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        float val = a->data[i];
+        result->data[i] = val * val;
+    }
+    result->_backward = [=](){
+        for(int i = 0; i < a->capacity; i++){
+            a->grad[i] += result->grad[i] * 2.0f * a->data[i];
+        }
+    };
+    return result;
+}
+
+Tensor* tensor_sign(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_sign");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        float val = a->data[i];
+        result->data[i] = (val > 0.0f) ? 1.0f : ((val < 0.0f) ? -1.0f : 0.0f);
+    }
+    result->_backward = [](){};
+    return result;
+}
+
+Tensor* tensor_abs(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_abs");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        result->data[i] = fabsf(a->data[i]);
+    }
+    result->_backward = [=](){
+        for(int i = 0; i < a->capacity; i++){
+            float val = a->data[i];
+            float sign = 0.0f;
+            if(val > 0.0f){
+                sign = 1.0f;
+            }else if(val < 0.0f){
+                sign = -1.0f;
+            }
+            a->grad[i] += result->grad[i] * sign;
+        }
+    };
+    return result;
+}
+
+Tensor* tensor_reciprocal(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_reciprocal");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        float val = a->data[i];
+        if(val == 0.0f){
+            fprintf(stderr, "Warning (tensor_reciprocal): division by zero\n");
+            result->data[i] = INFINITY;
+        }else{
+            result->data[i] = 1.0f / val;
+        }
+    }
+    result->_backward = [=](){
+        for(int i = 0; i < a->capacity; i++){
+            float val = a->data[i];
+            if(val == 0.0f){
+                continue;
+            }
+            float local_grad = -1.0f / (val * val);
+            a->grad[i] += result->grad[i] * local_grad;
+        }
+    };
+    return result;
+}
+
+Tensor* tensor_pow(Tensor* a, float exponent){
+    Tensor* result = tensor_unary_result(a, "tensor_pow");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        result->data[i] = powf(a->data[i], exponent);
+    }
+    const float exponent_copy = exponent;
+    result->_backward = [=](){
+        for(int i = 0; i < a->capacity; i++){
+            float base = a->data[i];
+            float local_grad = 0.0f;
+            if(base == 0.0f){
+                if(exponent_copy > 1.0f){
+                    local_grad = 0.0f;
+                }else if(exponent_copy == 1.0f){
+                    local_grad = 1.0f;
+                }else{
+                    continue;
+                }
+            }else{
+                local_grad = exponent_copy * powf(base, exponent_copy - 1.0f);
+            }
+            a->grad[i] += result->grad[i] * local_grad;
+        }
+    };
+    return result;
+}
+
+Tensor* tensor_exp(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_exp");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        result->data[i] = expf(a->data[i]);
+    }
+    result->_backward = [=](){
+        for(int i = 0; i < a->capacity; i++){
+            a->grad[i] += result->grad[i] * result->data[i];
+        }
+    };
+    return result;
+}
+
+Tensor* tensor_log(Tensor* a){
+    Tensor* result = tensor_unary_result(a, "tensor_log");
+    if(result == NULL){
+        return NULL;
+    }
+    for(int i = 0; i < a->capacity; i++){
+        float val = a->data[i];
+        if(val <= 0.0f){
+            fprintf(stderr, "Warning (tensor_log): log undefined for non-positive values, got %f\n", val);
+            result->data[i] = -INFINITY;
+        }else{
+            result->data[i] = logf(val);
+        }
+    }
+    result->_backward = [=](){
+        for(int i = 0; i < a->capacity; i++){
+            float val = a->data[i];
+            if(val <= 0.0f){
+                continue;
+            }
+            a->grad[i] += result->grad[i] / val;
         }
     };
     return result;
