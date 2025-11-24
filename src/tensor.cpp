@@ -1,4 +1,10 @@
-#include "tensor.h"
+#include "tensor.hpp"
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <functional>
+#include <vector>
+#include <string>
 
 Tensor* tensor_create(int ndim, int* shape) {
     if(ndim <= 0 || shape == NULL) {
@@ -61,6 +67,19 @@ Tensor* tensor_create(int ndim, int* shape) {
     
     t->ndim = ndim;
     t->capacity = capacity;
+    
+    t->_parents = (Tensor**)malloc(2 * sizeof(Tensor*));
+    if(t->_parents == NULL) {
+        fprintf(stderr, "Error: Failed to allocate memory for parents\n");
+        free(t->strides);
+        free(t->shape);
+        free(t->data);
+        free(t);
+        return NULL;
+    }
+    t->_parents[0] = NULL;
+    t->_parents[1] = NULL;
+
     return t;
 }
 
@@ -76,6 +95,9 @@ void tensor_free(Tensor* t) {
     }
     if(t->strides != NULL) {
         free(t->strides);
+    }
+    if(t->_parents != NULL) {
+        free(t->_parents);
     }
     free(t);
 }

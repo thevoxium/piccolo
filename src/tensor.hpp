@@ -1,13 +1,7 @@
 #ifndef TENSOR_H
 #define TENSOR_H
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <iostream>
-#include <functional>
-#include <vector>
-#include <string>
 
 typedef struct Tensor{
     float* data;
@@ -15,6 +9,8 @@ typedef struct Tensor{
     int* shape;
     int* strides;
     int capacity;
+
+    Tensor** _parents;
 } Tensor;
 
 Tensor* tensor_create(int ndim, int* shape);
