@@ -2,13 +2,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <climits>
 #include <functional>
 #include <vector>
 #include <string>
 
 Tensor* tensor_create(int ndim, int* shape) {
     if(ndim <= 0 || shape == NULL) {
-        fprintf(stderr, "Error: Check the input parameters, ndim: %d, shape: %p", ndim, shape);
+        fprintf(stderr, "Error: Check the input parameters, ndim: %d, shape: %p\n", ndim, shape);
         return NULL;
     }
     
@@ -19,9 +20,14 @@ Tensor* tensor_create(int ndim, int* shape) {
         }
     }
     
-    // Calculate capacity from shapes
+    // Calculate capacity from shapes with overflow protection
     int capacity = 1;
     for(int i = 0; i < ndim; i++) {
+        // Check for overflow before multiplying
+        if(shape[i] > 0 && capacity > INT_MAX / shape[i]) {
+            fprintf(stderr, "Error: Capacity calculation would overflow\n");
+            return NULL;
+        }
         capacity *= shape[i];
     }
     
@@ -84,10 +90,10 @@ Tensor* tensor_create(int ndim, int* shape) {
     t->grad = (float*)malloc(capacity * sizeof(float));
     if(t->grad == NULL) {
         fprintf(stderr, "Error: Failed to allocate memory for grad\n");
-        free(t->data);
-        free(t->shape);
-        free(t->strides);
         free(t->_parents);
+        free(t->strides);
+        free(t->shape);
+        free(t->data);
         free(t);
         return NULL;
     }
@@ -176,14 +182,23 @@ void tensor_free(Tensor* t) {
 std::ostream &operator<<(std::ostream &os, const Tensor &t) {
   os << "Tensor(";
 
+  // Check for NULL pointers before accessing
+  if (t.data == NULL || t.shape == NULL || t.strides == NULL) {
+    os << "INVALID_TENSOR";
+    return os;
+  }
+
   std::function<void(size_t, size_t, const std::vector<size_t> &)>
       print_recursive =
           [&](size_t offset, size_t dim, const std::vector<size_t> &coords) {
+            if (dim >= static_cast<size_t>(t.ndim)) return;
             if (dim == static_cast<size_t>(t.ndim) - 1) {
               // Print the innermost dimension
               os << "[";
               for (size_t i = 0; i < static_cast<size_t>(t.shape[dim]); ++i) {
-                os << t.data[offset + i];
+                if (offset + i < static_cast<size_t>(t.capacity)) {
+                  os << t.data[offset + i];
+                }
                 if (i < static_cast<size_t>(t.shape[dim]) - 1)
                   os << ", ";
               }
@@ -194,7 +209,9 @@ std::ostream &operator<<(std::ostream &os, const Tensor &t) {
                 if (i > 0)
                   os << ",\n" << std::string(dim + 1, ' ');
                 size_t new_offset = offset + i * t.strides[dim];
-                print_recursive(new_offset, dim + 1, coords);
+                if (new_offset < static_cast<size_t>(t.capacity)) {
+                  print_recursive(new_offset, dim + 1, coords);
+                }
               }
               os << "]";
             }

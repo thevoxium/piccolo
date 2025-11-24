@@ -8,6 +8,7 @@ void backward(Tensor* root){
     
     std::function<void(Tensor*)> build_topo =
       [&](Tensor* v) {
+        if (v == NULL) return;
         if (visited.find(v) == visited.end()) {
           visited.insert(v);
           for (int i = 0; i < 2; i++) {
@@ -22,14 +23,16 @@ void backward(Tensor* root){
     build_topo(root);
    
     // Initialize root gradient to 1.0f for each element
-    for (int i = 0; i < root->capacity; i++) {
-        root->grad[i] = 1.0f;
+    if (root->grad != NULL) {
+        for (int i = 0; i < root->capacity; i++) {
+            root->grad[i] = 1.0f;
+        }
     }
 
     std::reverse(topo.begin(), topo.end());
 
     for (Tensor* t : topo) {
-      if (t->_backward) {
+      if (t != NULL && t->_backward) {
         t->_backward();
       }
     }
