@@ -79,8 +79,20 @@ Tensor* tensor_create(int ndim, int* shape) {
     }
     t->_parents[0] = NULL;
     t->_parents[1] = NULL;
-    
     t->_backward = NULL;
+    
+    t->grad = (float*)malloc(capacity * sizeof(float));
+    if(t->grad == NULL) {
+        fprintf(stderr, "Error: Failed to allocate memory for grad\n");
+        free(t->data);
+        free(t->shape);
+        free(t->strides);
+        free(t->_parents);
+        free(t);
+        return NULL;
+    }
+    memset(t->grad, 0, capacity * sizeof(float));
+
 
     return t;
 }
@@ -100,6 +112,9 @@ void tensor_free(Tensor* t) {
     }
     if(t->_parents != NULL) {
         free(t->_parents);
+    }
+    if(t->grad != NULL) {
+        free(t->grad);
     }
     free(t);
 }

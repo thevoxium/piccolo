@@ -6,6 +6,7 @@
 
 typedef struct Tensor{
     float* data;
+    float* grad;
     int ndim;
     int* shape;
     int* strides;
