@@ -26,6 +26,7 @@ Tensor* tensor_pow(Tensor* a, float exponent);
 Tensor* tensor_exp(Tensor* a);
 Tensor* tensor_log(Tensor* a);
 Tensor* tensor_mm(Tensor* a, Tensor* b);
+Tensor* tensor_aggregate(Tensor* a);
 
 
 #endif

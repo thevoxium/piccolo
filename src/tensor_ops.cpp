@@ -592,3 +592,38 @@ Tensor* tensor_log(Tensor* a){
     };
     return result;
 }
+
+Tensor* tensor_aggregate(Tensor* a){
+    if(a == NULL){
+        fprintf(stderr, "Error: Tensor is NULL\n");
+        return NULL;
+    }
+
+    if(a->data == NULL || a->grad == NULL){
+        fprintf(stderr, "Error: Tensor data or grad arrays are NULL\n");
+        return NULL;
+    }
+    
+    float sum = 0.0f;
+    for(int i = 0; i < a->capacity; i++){
+        sum += a->data[i];
+    }
+    
+    int result_shape[] = {1};
+    Tensor* result = tensor_create(1, result_shape);
+    if(result == NULL){
+        return NULL;
+    }
+    result->data[0] = sum;
+    
+    result->_parents[0] = (Tensor*)a;
+    result->_parents[1] = NULL;
+    
+    result->_backward = [=](){
+        float grad_val = result->grad[0];
+        for (int i=0; i < a->capacity; i++){
+            a->grad[i] += grad_val;
+        }
+    };
+    return result;
+}

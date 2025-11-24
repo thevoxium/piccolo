@@ -1,59 +1,36 @@
 #include "src/tensor.hpp"
 #include "src/tensor_ops.hpp"
+#include "src/loss.hpp"
 #include "src/engine.hpp"
 #include <iostream>
 #include <cstdio>
 
 int main() {
-    // Multiply two compatible matrices using BLAS-backed tensor_mm
-    int shape_a[] = {2, 3};
-    int shape_b[] = {3, 2};
-    Tensor* a = tensor_random(2, shape_a);
-    Tensor* b = tensor_random(2, shape_b);
-    
-    if (a == NULL || b == NULL) {
-        std::cerr << "Error: Failed to create tensors" << std::endl;
-        if (a != NULL) tensor_free(a);
-        if (b != NULL) tensor_free(b);
-        return 1;
+    Tensor* x = tensor_random(2, new int[2]{1000, 1});
+    Tensor* y = tensor_sin(x);
+   
+    Tensor* w = tensor_random(2, new int[2]{1, 1});
+    Tensor* b = tensor_random(2, new int[2]{1000, 1});
+
+    int epochs = 100;
+    for (int i=0 ; i< epochs; i++){
+        Tensor* z = tensor_mm(x, w);
+        Tensor* pred = tensor_add(z, b);
+        Tensor* loss = loss_mse(pred, y);
+        backward(loss);
+        w = tensor_sub(w, tensor_scale(w, 0.01f));
+        b = tensor_sub(b, tensor_scale(b, 0.01f));
+        std::cout << "Epoch " << i << " Loss: " << loss->data[0] << std::endl;
+        tensor_free(z);
+        tensor_free(pred);
+        tensor_free(loss);
     }
-    
-    Tensor* result = tensor_mm(a, b);
-    
-    if (result == NULL) {
-        std::cerr << "Error: tensor_mm failed" << std::endl;
-        tensor_free(a);
-        tensor_free(b);
-        return 1;
-    }
-    
-    std::cout << "Tensor a: " << *a << std::endl;
-    std::cout << "Tensor b: " << *b << std::endl;
-    std::cout << "Result (a mm b): " << *result << std::endl;
-    
-    // Compute gradients through the matmul
-    backward(result);
-    
-    auto print_grad = [](const char* label, Tensor* t) {
-        if (t == NULL || t->grad == NULL) return;
-        std::cout << label << ": [";
-        for (int i = 0; i < t->capacity; i++) {
-            std::cout << t->grad[i];
-            if (i < t->capacity - 1) std::cout << ", ";
-        }
-        std::cout << "]" << std::endl;
-    };
-    
-    std::cout << "\nGradients:" << std::endl;
-    print_grad("Result grad", result);
-    print_grad("Tensor a grad", a);
-    print_grad("Tensor b grad", b);
-    
-    // Clean up
-    tensor_free(result);
-    tensor_free(a);
+
+    tensor_free(x);
+    tensor_free(y);
+    tensor_free(w);
     tensor_free(b);
-    
+
     return 0;
 }
 
