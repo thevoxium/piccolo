@@ -79,3 +79,42 @@ void tensor_free(Tensor* t) {
     }
     free(t);
 }
+
+std::ostream &operator<<(std::ostream &os, const Tensor &t) {
+  os << "Tensor(";
+
+  std::function<void(size_t, size_t, const std::vector<size_t> &)>
+      print_recursive =
+          [&](size_t offset, size_t dim, const std::vector<size_t> &coords) {
+            if (dim == static_cast<size_t>(t.ndim) - 1) {
+              // Print the innermost dimension
+              os << "[";
+              for (size_t i = 0; i < static_cast<size_t>(t.shape[dim]); ++i) {
+                os << t.data[offset + i];
+                if (i < static_cast<size_t>(t.shape[dim]) - 1)
+                  os << ", ";
+              }
+              os << "]";
+            } else {
+              os << "[";
+              for (size_t i = 0; i < static_cast<size_t>(t.shape[dim]); ++i) {
+                if (i > 0)
+                  os << ",\n" << std::string(dim + 1, ' ');
+                size_t new_offset = offset + i * t.strides[dim];
+                print_recursive(new_offset, dim + 1, coords);
+              }
+              os << "]";
+            }
+          };
+
+  print_recursive(0, 0, {});
+  os << ", shape: (";
+  for (int i = 0; i < t.ndim; ++i) {
+    os << t.shape[i];
+    if (i < t.ndim - 1)
+      os << ", ";
+  }
+  os << "))";
+
+  return os;
+}

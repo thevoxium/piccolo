@@ -8,6 +8,7 @@ int main(){
         fprintf(stderr, "Error: Failed to create tensor\n");
         return -1;
     }
+    std::cout << *t << std::endl;
     tensor_free(t);
     return 0;
 }
