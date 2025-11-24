@@ -79,6 +79,8 @@ Tensor* tensor_create(int ndim, int* shape) {
     }
     t->_parents[0] = NULL;
     t->_parents[1] = NULL;
+    
+    t->_backward = NULL;
 
     return t;
 }

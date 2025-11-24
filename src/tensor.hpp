@@ -2,6 +2,7 @@
 #define TENSOR_H
 
 #include <iostream>
+#include <functional>
 
 typedef struct Tensor{
     float* data;
@@ -11,6 +12,7 @@ typedef struct Tensor{
     int capacity;
 
     Tensor** _parents;
+    std::function<void()> _backward;
 } Tensor;
 
 Tensor* tensor_create(int ndim, int* shape);
