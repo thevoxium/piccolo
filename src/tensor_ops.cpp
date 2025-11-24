@@ -25,11 +25,6 @@ Tensor* tensor_add(Tensor* a, Tensor* b){
     if(result == NULL){
         return NULL;
     }
-    if(result->data == NULL || result->grad == NULL){
-        fprintf(stderr, "Error: Failed to allocate result tensor arrays\n");
-        tensor_free(result);
-        return NULL;
-    }
     for(int i = 0; i < a->capacity; i++){
         result->data[i] = a->data[i] + b->data[i];
     }
@@ -38,11 +33,9 @@ Tensor* tensor_add(Tensor* a, Tensor* b){
     result->_parents[1] = (Tensor*)b;
     
     result->_backward = [=](){
-        if(a->grad != NULL && b->grad != NULL && result->grad != NULL){
-            for (int i=0; i < a->capacity; i++){
-                a->grad[i] += result->grad[i];
-                b->grad[i] += result->grad[i];
-            }
+        for (int i=0; i < a->capacity; i++){
+            a->grad[i] += result->grad[i];
+            b->grad[i] += result->grad[i];
         }
     };
     return result;
@@ -72,11 +65,6 @@ Tensor* tensor_sub(Tensor* a, Tensor* b){
     if(result == NULL){
         return NULL;
     }
-    if(result->data == NULL || result->grad == NULL){
-        fprintf(stderr, "Error: Failed to allocate result tensor arrays\n");
-        tensor_free(result);
-        return NULL;
-    }
     for(int i = 0; i < a->capacity; i++){
         result->data[i] = a->data[i] - b->data[i];
     }
@@ -85,11 +73,9 @@ Tensor* tensor_sub(Tensor* a, Tensor* b){
     result->_parents[1] = (Tensor*)b;
     
     result->_backward = [=](){
-        if(a->grad != NULL && b->grad != NULL && result->grad != NULL){
-            for (int i=0; i < a->capacity; i++){
-                a->grad[i] += result->grad[i];
-                b->grad[i] -= result->grad[i];
-            }
+        for (int i=0; i < a->capacity; i++){
+            a->grad[i] += result->grad[i];
+            b->grad[i] -= result->grad[i];
         }
     };
     return result;
@@ -109,11 +95,6 @@ Tensor* tensor_scale(Tensor* a, float k){
     if(result == NULL){
         return NULL;
     }
-    if(result->data == NULL || result->grad == NULL){
-        fprintf(stderr, "Error: Failed to allocate result tensor arrays\n");
-        tensor_free(result);
-        return NULL;
-    }
     for(int i = 0; i < a->capacity; i++){
         result->data[i] = k * a->data[i];
     }
@@ -122,10 +103,8 @@ Tensor* tensor_scale(Tensor* a, float k){
     result->_parents[1] = NULL;
     
     result->_backward = [=](){
-        if(a->grad != NULL && result->grad != NULL){
-            for (int i=0; i < a->capacity; i++){
-                a->grad[i] += k * result->grad[i];
-            }
+        for (int i=0; i < a->capacity; i++){
+            a->grad[i] += k * result->grad[i];
         }
     };
     return result;
@@ -163,23 +142,16 @@ Tensor* tensor_dot(Tensor* a, Tensor* b){
     if(result == NULL){
         return NULL;
     }
-    if(result->data == NULL || result->grad == NULL){
-        fprintf(stderr, "Error: Failed to allocate result tensor arrays\n");
-        tensor_free(result);
-        return NULL;
-    }
     result->data[0] = dot_result;
     
     result->_parents[0] = (Tensor*)a;
     result->_parents[1] = (Tensor*)b;
     
     result->_backward = [=](){
-        if(a->grad != NULL && b->grad != NULL && result->grad != NULL && a->data != NULL && b->data != NULL){
-            float grad_val = result->grad[0];
-            for (int i=0; i < a->capacity; i++){
-                a->grad[i] += b->data[i] * grad_val;
-                b->grad[i] += a->data[i] * grad_val;
-            }
+        float grad_val = result->grad[0];
+        for (int i=0; i < a->capacity; i++){
+            a->grad[i] += b->data[i] * grad_val;
+            b->grad[i] += a->data[i] * grad_val;
         }
     };
     return result;
