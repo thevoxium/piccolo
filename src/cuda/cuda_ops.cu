@@ -14,7 +14,7 @@ __global__ void tensor_add_kernel(const float *a, const float *b, float *result,
 }
 
 // Host function to launch the CUDA kernel
-void tensor_add_cuda(const float *a, const float *b, float *result, int size) {
+void cu_tensor_add(const float *a, const float *b, float *result, int size) {
   // Calculate grid and block dimensions
   int threadsPerBlock = 256;
   int blocksPerGrid = (size + threadsPerBlock - 1) / threadsPerBlock;
