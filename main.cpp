@@ -6,7 +6,6 @@
 
 int main() {
   Tensor *x = tensor_random(2, new int[2]{1000, 1}, DEVICE_GPU);
-
   Tensor *y = tensor_random(2, new int[2]{1000, 1}, DEVICE_GPU);
 
   std::cout << *x << std::endl;

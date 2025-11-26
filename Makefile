@@ -53,6 +53,18 @@ ifeq ($(CUDA),1)
     endif
   endif
   
+  # Set NVCC compiler if not already set
+  ifeq ($(NVCC),)
+    NVCC := $(CUDA_PATH)/bin/nvcc
+    ifeq ($(wildcard $(NVCC)),)
+      NVCC := nvcc
+    endif
+  endif
+  
+  # NVCC flags
+  NVCCFLAGS = -std=c++17 -I. -Isrc -DUSE_CUDA
+  NVCCFLAGS += -I$(CUDA_PATH)/include -I/usr/local/cuda/include
+  
   # Add CUDA include directories
   # Always add the detected CUDA path
   CXXFLAGS += -I$(CUDA_PATH)/include
@@ -72,16 +84,23 @@ endif
 # Source directories
 SRC_DIR = src
 SRC_FILES = $(wildcard $(SRC_DIR)/*.cpp)
+CUDA_DIR = src/cuda
+CUDA_FILES = $(wildcard $(CUDA_DIR)/*.cu)
 MAIN_FILE = main.cpp
 
 # Object files
 OBJ_DIR = build
 OBJ_FILES = $(SRC_FILES:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
+CUDA_OBJ_FILES = $(CUDA_FILES:$(CUDA_DIR)/%.cu=$(OBJ_DIR)/cuda_%.o)
 MAIN_OBJ = $(OBJ_DIR)/main.o
 TARGET = $(OBJ_DIR)/piccolo
 
-# All object files
-ALL_OBJ = $(MAIN_OBJ) $(OBJ_FILES)
+# All object files (conditionally include CUDA objects)
+ifeq ($(CUDA),1)
+  ALL_OBJ = $(MAIN_OBJ) $(OBJ_FILES) $(CUDA_OBJ_FILES)
+else
+  ALL_OBJ = $(MAIN_OBJ) $(OBJ_FILES)
+endif
 
 # Default target
 all: $(TARGET)
@@ -93,6 +112,15 @@ $(OBJ_DIR):
 # Compile source files from src/
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compile CUDA source files from src/cuda/
+$(OBJ_DIR)/cuda_%.o: $(CUDA_DIR)/%.cu | $(OBJ_DIR)
+ifeq ($(CUDA),1)
+	$(NVCC) $(NVCCFLAGS) -c $< -o $@
+else
+	@echo "Error: CUDA file $< requires CUDA=1"
+	@exit 1
+endif
 
 # Compile main.cpp
 $(MAIN_OBJ): $(MAIN_FILE) | $(OBJ_DIR)
