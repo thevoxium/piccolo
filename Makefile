@@ -62,8 +62,16 @@ ifeq ($(CUDA),1)
   endif
   
   # NVCC flags
+  # Add GPU architecture support for common Colab GPUs:
+  # - sm_70: V100
+  # - sm_75: T4
+  # - sm_80: A100
+  # Using -gencode for multiple architectures ensures compatibility
   NVCCFLAGS = -std=c++17 -I. -Isrc -DUSE_CUDA
   NVCCFLAGS += -I$(CUDA_PATH)/include -I/usr/local/cuda/include
+  NVCCFLAGS += -gencode arch=compute_70,code=sm_70
+  NVCCFLAGS += -gencode arch=compute_75,code=sm_75
+  NVCCFLAGS += -gencode arch=compute_80,code=sm_80
   
   # Add CUDA include directories
   # Always add the detected CUDA path

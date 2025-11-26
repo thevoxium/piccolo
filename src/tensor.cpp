@@ -214,9 +214,41 @@ std::ostream &operator<<(std::ostream &os, const Tensor &t) {
   os << "Tensor(";
 
   // Check for NULL pointers before accessing
-  if (t.data == NULL || t.shape == NULL || t.strides == NULL) {
+  if (t.shape == NULL || t.strides == NULL) {
     os << "INVALID_TENSOR";
     return os;
+  }
+
+  // Determine which data pointer to use based on device
+  float *data_to_print = nullptr;
+  float *temp_buffer = nullptr;
+
+  if (t.device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    // For GPU tensors, copy d_data to a temporary CPU buffer
+    if (t.d_data == NULL) {
+      os << "INVALID_TENSOR";
+      return os;
+    }
+    temp_buffer = (float *)malloc(t.capacity * sizeof(float));
+    if (temp_buffer == NULL) {
+      os << "INVALID_TENSOR";
+      return os;
+    }
+    CUDA_CHECK(cudaMemcpy(temp_buffer, t.d_data, t.capacity * sizeof(float),
+                          cudaMemcpyDeviceToHost));
+    data_to_print = temp_buffer;
+#else
+    os << "INVALID_TENSOR";
+    return os;
+#endif
+  } else {
+    // For CPU tensors, use t.data directly
+    if (t.data == NULL) {
+      os << "INVALID_TENSOR";
+      return os;
+    }
+    data_to_print = t.data;
   }
 
   std::function<void(size_t, size_t, const std::vector<size_t> &)>
@@ -229,7 +261,7 @@ std::ostream &operator<<(std::ostream &os, const Tensor &t) {
               os << "[";
               for (size_t i = 0; i < static_cast<size_t>(t.shape[dim]); ++i) {
                 if (offset + i < static_cast<size_t>(t.capacity)) {
-                  os << t.data[offset + i];
+                  os << data_to_print[offset + i];
                 }
                 if (i < static_cast<size_t>(t.shape[dim]) - 1)
                   os << ", ";
@@ -258,6 +290,11 @@ std::ostream &operator<<(std::ostream &os, const Tensor &t) {
   }
   os << ")), Device \n";
   os << t.device << "\n";
+
+  // Free temporary buffer if it was allocated
+  if (temp_buffer != nullptr) {
+    free(temp_buffer);
+  }
 
   return os;
 }

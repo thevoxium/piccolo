@@ -7,11 +7,14 @@
 int main() {
   Tensor *x = tensor_random(2, new int[2]{1000, 1}, DEVICE_GPU);
   Tensor *y = tensor_random(2, new int[2]{1000, 1}, DEVICE_GPU);
+  
+  Tensor *z = tensor_add(x, y);
 
-  std::cout << *x << std::endl;
+  std::cout << *z << std::endl;
 
   tensor_free(x);
   tensor_free(y);
+  tensor_free(z);
   // Tensor *x = tensor_random(2, new int[2]{1000, 1}, DEVICE_GPU);
   // Tensor *y = tensor_sin(x);
   //
