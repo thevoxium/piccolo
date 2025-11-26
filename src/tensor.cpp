@@ -33,6 +33,14 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
     capacity *= shape[i];
   }
 
+  // Initially, I was using malloc here, it was working fine on mac locally
+  // but when run on colab, it was seg fault all over the place
+  // now i did not know the issue, what was causing it
+  // LLM suggested to use new and delete here because of the backward
+  // std::function it says since malloc/free does not call constructor and
+  // destructor, it is allocating garbage to the backward() new and delete
+  // correctly calls constructor and destructor correctly need to check this
+  // more
   Tensor *t = new Tensor();
   if (t == NULL) {
     fprintf(stderr, "Error: Failed to allocate memory for Tensor\n");
@@ -105,9 +113,8 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
 
   if (device == DEVICE_GPU) {
 #ifdef USE_CUDA
-    t->d_data = nullptr;
-    t->d_grad = nullptr;
-    printf("cuda available, allocating on device\n");
+    CHECK_CUDA(cudaMalloc(&t->d_data, capacity * sizeof(float)));
+    CHECK_CUDA(cudaMalloc(&t->d_grad, capacity * sizeof(float)));
 #else
     fprintf(
         stderr,
