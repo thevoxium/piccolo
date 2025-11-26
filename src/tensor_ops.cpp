@@ -204,13 +204,18 @@ Tensor* tensor_mm(Tensor* a, Tensor* b){
         fprintf(stderr, "Error (tensor_mm): Tensor data or grad arrays are NULL\n");
         return NULL;
     }
+    // cblas_sgemm requires CPU tensors
+    if(a->device != DEVICE_CPU || b->device != DEVICE_CPU){
+        fprintf(stderr, "Error (tensor_mm): Both tensors must be on CPU (cblas_sgemm is CPU-only)\n");
+        return NULL;
+    }
 
     const int m = a->shape[0];
     const int k = a->shape[1];
     const int n = b->shape[1];
 
     int result_shape[2] = {m, n};
-    Tensor* result = tensor_create(2, result_shape);
+    Tensor* result = tensor_create(2, result_shape, DEVICE_CPU);
     if(result == NULL){
         fprintf(stderr, "Error (tensor_mm): Failed to create result tensor\n");
         return NULL;
