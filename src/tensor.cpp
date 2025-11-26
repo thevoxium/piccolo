@@ -9,26 +9,19 @@
 
 Tensor *tensor_create(int ndim, int *shape, Device device) {
   if (ndim <= 0 || shape == NULL) {
-    fprintf(stderr, "Error: Check the input parameters, ndim: %d, shape: %p\n",
-            ndim, shape);
-    return NULL;
+    ERROR_RETURN_NULL("Error: Check for ndim or shape of the tensor \n");
   }
 
   for (int i = 0; i < ndim; i++) {
     if (shape[i] <= 0) {
-      fprintf(stderr, "Error: shape[%d] must be positive, got %d\n", i,
-              shape[i]);
-      return NULL;
+      ERROR_RETURN_NULL("Error: Shape can't be negative\n");
     }
   }
 
-  // Calculate capacity from shapes with overflow protection
   int capacity = 1;
   for (int i = 0; i < ndim; i++) {
-    // Check for overflow before multiplying
     if (shape[i] > 0 && capacity > INT_MAX / shape[i]) {
-      fprintf(stderr, "Error: Capacity calculation would overflow\n");
-      return NULL;
+      ERROR_RETURN_NULL("Error: Capcity overflow for tensor allocation\n");
     }
     capacity *= shape[i];
   }
@@ -42,40 +35,30 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
   // correctly calls constructor and destructor correctly need to check this
   // more
   Tensor *t = new Tensor();
-  if (t == NULL) {
-    fprintf(stderr, "Error: Failed to allocate memory for Tensor\n");
-    return NULL;
-  }
+  CHECK_NULL_T(t);
 
   t->data = (float *)malloc(capacity * sizeof(float));
   if (t->data == NULL) {
-    fprintf(stderr, "Error: Failed to allocate memory for data\n");
     delete t;
     return NULL;
   }
 
-  // Allocate and copy the shape array
   t->shape = (int *)malloc(ndim * sizeof(int));
   if (t->shape == NULL) {
-    fprintf(stderr, "Error: Failed to allocate memory for shape\n");
     free(t->data);
     delete t;
     return NULL;
   }
   memcpy(t->shape, shape, ndim * sizeof(int));
 
-  // Allocate and calculate strides (row-major order)
   t->strides = (int *)malloc(ndim * sizeof(int));
   if (t->strides == NULL) {
-    fprintf(stderr, "Error: Failed to allocate memory for strides\n");
     free(t->shape);
     free(t->data);
     delete t;
     return NULL;
   }
 
-  // Calculate strides: stride[i] = product of shape[i+1] to shape[ndim-1]
-  // For row-major order, last dimension has stride 1
   t->strides[ndim - 1] = 1;
   for (int i = ndim - 2; i >= 0; i--) {
     t->strides[i] = t->strides[i + 1] * shape[i + 1];
@@ -86,7 +69,6 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
 
   t->_parents = (Tensor **)malloc(2 * sizeof(Tensor *));
   if (t->_parents == NULL) {
-    fprintf(stderr, "Error: Failed to allocate memory for parents\n");
     free(t->strides);
     free(t->shape);
     free(t->data);
@@ -99,7 +81,6 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
 
   t->grad = (float *)malloc(capacity * sizeof(float));
   if (t->grad == NULL) {
-    fprintf(stderr, "Error: Failed to allocate memory for grad\n");
     free(t->_parents);
     free(t->strides);
     free(t->shape);
@@ -115,11 +96,9 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
 #ifdef USE_CUDA
     CUDA_CHECK(cudaMalloc(&t->d_data, capacity * sizeof(float)));
     CUDA_CHECK(cudaMalloc(&t->d_grad, capacity * sizeof(float)));
-    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, capacity * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, capacity * sizeof(float), cudaMemcpyHostToDevice));
 #else
-    fprintf(stderr, "Warning: CUDA is not available, allocate it on CPU\n");
-    return NULL;
+    ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
+    t->device = DEVICE_CPU;
 #endif
   }
 
@@ -128,12 +107,22 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
 
 Tensor *tensor_ones(int ndim, int *shape, Device device) {
   Tensor *t = tensor_create(ndim, shape, device);
-  if (t == NULL) {
-    return NULL;
-  }
+  CHECK_NULL_T(t);
 
   for (int i = 0; i < t->capacity; i++) {
     t->data[i] = 1.0f;
+  }
+
+  if (t->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float)),
+               cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float)),
+               cudaMemcpyHostToDevice);
+#else
+    ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
+    t->device = DEVICE_CPU;
+#endif
   }
 
   return t;
@@ -141,32 +130,42 @@ Tensor *tensor_ones(int ndim, int *shape, Device device) {
 
 Tensor *tensor_zeroes(int ndim, int *shape, Device device) {
   Tensor *t = tensor_create(ndim, shape, device);
-  if (t == NULL) {
-    return NULL;
-  }
+  CHECK_NULL_T(t);
 
   memset(t->data, 0, t->capacity * sizeof(float));
+
+  if (t->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float)),
+               cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float)),
+               cudaMemcpyHostToDevice);
+#else
+    ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
+    t->device = DEVICE_CPU;
+#endif
+  }
 
   return t;
 }
 
 Tensor *tensor_random(int ndim, int *shape, Device device) {
   Tensor *t = tensor_create(ndim, shape, device);
-  if (t == NULL) {
-    return NULL;
-  }
+  CHECK_NULL_T(t);
 
   for (int i = 0; i < t->capacity; i++) {
     t->data[i] = (float)rand() / (float)RAND_MAX;
   }
 
-  // If device is GPU, copy the random data to GPU memory
-  if (device == DEVICE_GPU) {
+  if (t->device == DEVICE_GPU) {
 #ifdef USE_CUDA
-    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float)),
+               cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float)),
+               cudaMemcpyHostToDevice);
 #else
-    fprintf(stderr, "Error: Device is GPU but USE_CUDA not used\n");
-    return NULL;
+    ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
+    t->device = DEVICE_CPU;
 #endif
   }
 
@@ -175,16 +174,25 @@ Tensor *tensor_random(int ndim, int *shape, Device device) {
 
 Tensor *tensor_from_data(int ndim, int *shape, float *data, Device device) {
   if (data == NULL) {
-    fprintf(stderr, "Error: data array is NULL\n");
-    return NULL;
+    ERROR_RETURN_NULL("Error: data array is NULL\n");
   }
 
   Tensor *t = tensor_create(ndim, shape, device);
-  if (t == NULL) {
-    return NULL;
-  }
+  CHECK_NULL_T(t);
 
   memcpy(t->data, data, t->capacity * sizeof(float));
+
+  if (t->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float)),
+               cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float)),
+               cudaMemcpyHostToDevice);
+#else
+    ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
+    t->device = DEVICE_CPU;
+#endif
+  }
 
   return t;
 }
@@ -214,99 +222,9 @@ void tensor_free(Tensor *t) {
     CUDA_CHECK(cudaFree(t->d_data));
     CUDA_CHECK(cudaFree(t->d_grad));
 #else
-    fprintf(stderr,
-            "Device is GPU but USE CUDA not used to compile the project\n");
+    ERROR_MSG("Error: Free, device is GPU but not build using CUDA Flag\n");
 #endif
   }
 
   delete t;
-}
-
-std::ostream &operator<<(std::ostream &os, const Tensor &t) {
-  os << "Tensor(";
-
-  // Check for NULL pointers before accessing
-  if (t.shape == NULL || t.strides == NULL) {
-    os << "INVALID_TENSOR";
-    return os;
-  }
-
-  // Determine which data pointer to use based on device
-  float *data_to_print = nullptr;
-  float *temp_buffer = nullptr;
-
-  if (t.device == DEVICE_GPU) {
-#ifdef USE_CUDA
-    // For GPU tensors, copy d_data to a temporary CPU buffer
-    if (t.d_data == NULL) {
-      os << "INVALID_TENSOR";
-      return os;
-    }
-    temp_buffer = (float *)malloc(t.capacity * sizeof(float));
-    if (temp_buffer == NULL) {
-      os << "INVALID_TENSOR";
-      return os;
-    }
-    CUDA_CHECK(cudaMemcpy(temp_buffer, t.d_data, t.capacity * sizeof(float),
-                          cudaMemcpyDeviceToHost));
-    data_to_print = temp_buffer;
-#else
-    os << "INVALID_TENSOR";
-    return os;
-#endif
-  } else {
-    // For CPU tensors, use t.data directly
-    if (t.data == NULL) {
-      os << "INVALID_TENSOR";
-      return os;
-    }
-    data_to_print = t.data;
-  }
-
-  std::function<void(size_t, size_t, const std::vector<size_t> &)>
-      print_recursive =
-          [&](size_t offset, size_t dim, const std::vector<size_t> &coords) {
-            if (dim >= static_cast<size_t>(t.ndim))
-              return;
-            if (dim == static_cast<size_t>(t.ndim) - 1) {
-              // Print the innermost dimension
-              os << "[";
-              for (size_t i = 0; i < static_cast<size_t>(t.shape[dim]); ++i) {
-                if (offset + i < static_cast<size_t>(t.capacity)) {
-                  os << data_to_print[offset + i];
-                }
-                if (i < static_cast<size_t>(t.shape[dim]) - 1)
-                  os << ", ";
-              }
-              os << "]";
-            } else {
-              os << "[";
-              for (size_t i = 0; i < static_cast<size_t>(t.shape[dim]); ++i) {
-                if (i > 0)
-                  os << ",\n" << std::string(dim + 1, ' ');
-                size_t new_offset = offset + i * t.strides[dim];
-                if (new_offset < static_cast<size_t>(t.capacity)) {
-                  print_recursive(new_offset, dim + 1, coords);
-                }
-              }
-              os << "]";
-            }
-          };
-
-  print_recursive(0, 0, {});
-  os << ", shape: (";
-  for (int i = 0; i < t.ndim; ++i) {
-    os << t.shape[i];
-    if (i < t.ndim - 1)
-      os << ", ";
-  }
-  os << ")), Device \n";
-  os << t.device << "\n";
-
-  // Free temporary buffer if it was allocated
-  if (temp_buffer != nullptr) {
-    free(temp_buffer);
-  }
-
-  return os;
 }

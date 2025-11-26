@@ -5,9 +5,9 @@
 #include <iostream>
 
 int main() {
-  Tensor *x = tensor_random(2, new int[2]{1000, 1}, DEVICE_GPU);
-  Tensor *y = tensor_random(2, new int[2]{1000, 1}, DEVICE_GPU);
-  
+  Tensor *x = tensor_random(2, new int[2]{1000, 1}, DEVICE_CPU);
+  Tensor *y = tensor_random(2, new int[2]{1000, 1}, DEVICE_CPU);
+
   Tensor *z = tensor_add(x, y);
 
   std::cout << *z << std::endl;

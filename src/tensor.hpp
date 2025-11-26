@@ -8,6 +8,18 @@
 #include <functional>
 #include <iostream>
 
+#define CHECK_NULL_T(t)                                                        \
+  if (t == NULL) {                                                             \
+    fprintf(stderr, "Error: Tensor is Null\n");                                \
+    return NULL;                                                               \
+  }
+
+#define ERROR_RETURN_NULL(s)                                                   \
+  fprintf(stderr, s);                                                          \
+  return NULL;
+
+#define ERROR_MSG(s) fprintf(stderr, s);
+
 typedef enum Device { DEVICE_CPU, DEVICE_GPU } Device;
 
 typedef struct Tensor {
