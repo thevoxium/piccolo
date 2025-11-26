@@ -4,11 +4,17 @@ CXXFLAGS = -std=c++17 -Wall -Wextra -I. -Isrc
 LDFLAGS =
 LDLIBS =
 
-# OpenBLAS support (optional, for Mac Homebrew)
+# BLAS/CBLAS support
+# 1. Check for Mac Homebrew OpenBLAS
 OPENBLAS_DIR ?= /opt/homebrew/opt/openblas
 ifneq ($(wildcard $(OPENBLAS_DIR)/include),)
   CXXFLAGS += -I$(OPENBLAS_DIR)/include
   LDFLAGS += -L$(OPENBLAS_DIR)/lib
+  LDLIBS += -lopenblas
+else
+  # 2. For Linux/Colab: try system OpenBLAS or CBLAS
+  # OpenBLAS is typically installed on Colab and provides CBLAS interface
+  # We'll link against it - the linker will find it in system paths
   LDLIBS += -lopenblas
 endif
 
