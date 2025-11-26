@@ -1,6 +1,10 @@
 #ifndef TENSOR_H
 #define TENSOR_H
 
+#ifdef USE_CUDA
+#include "cuda/cuda_utils.hpp"
+#endif //
+
 #include <functional>
 #include <iostream>
 

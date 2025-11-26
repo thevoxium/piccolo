@@ -1,6 +1,6 @@
 # Compiler and flags
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -I.
+CXXFLAGS = -std=c++17 -Wall -Wextra -I. -Isrc
 OPENBLAS_DIR ?= /opt/homebrew/opt/openblas
 CXXFLAGS += -I$(OPENBLAS_DIR)/include
 LDFLAGS += -L$(OPENBLAS_DIR)/lib
@@ -9,6 +9,20 @@ LDLIBS += -lopenblas
 # CUDA support (set via CUDA=1 or use run-cuda target)
 ifeq ($(CUDA),1)
   CXXFLAGS += -DUSE_CUDA
+  # Try to find CUDA installation
+  CUDA_PATH ?= /usr/local/cuda
+  # Check if CUDA is installed via nvcc
+  NVCC := $(shell which nvcc 2>/dev/null)
+  ifneq ($(NVCC),)
+    # Extract CUDA path from nvcc location
+    CUDA_PATH := $(shell dirname $(shell dirname $(NVCC)))
+  endif
+  # Add CUDA include directories
+  CXXFLAGS += -I$(CUDA_PATH)/include
+  # Add CUDA library directories
+  LDFLAGS += -L$(CUDA_PATH)/lib64 -L$(CUDA_PATH)/lib
+  # Link CUDA runtime library
+  LDLIBS += -lcudart
 endif
 
 # Source directories
