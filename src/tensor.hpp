@@ -1,30 +1,38 @@
 #ifndef TENSOR_H
 #define TENSOR_H
 
-#include <iostream>
 #include <functional>
+#include <iostream>
 
-typedef struct Tensor{
-    float* data;
-    float* grad;
-    int ndim;
-    int* shape;
-    int* strides;
-    int capacity;
+typedef enum Device { DEVICE_CPU, DEVICE_GPU } Device;
 
-    Tensor** _parents;
-    std::function<void()> _backward;
+typedef struct Tensor {
+  float *data;
+  float *grad;
+  int ndim;
+  int *shape;
+  int *strides;
+  int capacity;
+  Device device;
+
+  Tensor **_parents;
+  std::function<void()> _backward;
+
+#ifdef USE_CUDA
+  float *d_data;
+  float *d_grad;
+#endif //
+
 } Tensor;
 
-Tensor* tensor_create(int ndim, int* shape);
-void tensor_free(Tensor* t);
+Tensor *tensor_create(int ndim, int *shape, Device = DEVICE_CPU);
+void tensor_free(Tensor *t);
 std::ostream &operator<<(std::ostream &os, const Tensor &t);
 
-Tensor* tensor_ones(int ndim, int* shape);
-Tensor* tensor_zeroes(int ndim, int* shape);
-Tensor* tensor_random(int ndim, int* shape);
-Tensor* tensor_from_data(int ndim, int* shape, float* data);
-
-
+Tensor *tensor_ones(int ndim, int *shape, Device = DEVICE_CPU);
+Tensor *tensor_zeroes(int ndim, int *shape, Device = DEVICE_CPU);
+Tensor *tensor_random(int ndim, int *shape, Device = DEVICE_CPU);
+Tensor *tensor_from_data(int ndim, int *shape, float *data,
+                         Device = DEVICE_CPU);
 
 #endif

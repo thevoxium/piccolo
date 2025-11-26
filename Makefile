@@ -5,7 +5,11 @@ OPENBLAS_DIR ?= /opt/homebrew/opt/openblas
 CXXFLAGS += -I$(OPENBLAS_DIR)/include
 LDFLAGS += -L$(OPENBLAS_DIR)/lib
 LDLIBS += -lopenblas
-TARGET = piccolo
+
+# CUDA support (set via CUDA=1 or use run-cuda target)
+ifeq ($(CUDA),1)
+  CXXFLAGS += -DUSE_CUDA
+endif
 
 # Source directories
 SRC_DIR = src
@@ -16,6 +20,7 @@ MAIN_FILE = main.cpp
 OBJ_DIR = build
 OBJ_FILES = $(SRC_FILES:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 MAIN_OBJ = $(OBJ_DIR)/main.o
+TARGET = $(OBJ_DIR)/piccolo
 
 # All object files
 ALL_OBJ = $(MAIN_OBJ) $(OBJ_FILES)
@@ -39,32 +44,28 @@ $(MAIN_OBJ): $(MAIN_FILE) | $(OBJ_DIR)
 $(TARGET): $(ALL_OBJ)
 	$(CXX) $(ALL_OBJ) $(LDFLAGS) -o $(TARGET) $(LDLIBS)
 
-# Run target - cleans and rebuilds, then runs
+# Run target - cleans and rebuilds, then runs (defaults to CPU)
 run: clean $(TARGET)
 	./$(TARGET)
+	rm -rf $(OBJ_DIR)
 
-# Test files
-TEST_DIR = tests
-TEST_TARGET = test_runner
-TEST_FILE = $(TEST_DIR)/test_all.cpp
-TEST_OBJ = $(OBJ_DIR)/test_all.o
+# Run with CPU (no CUDA flags)
+run-cpu:
+	$(MAKE) clean CUDA=0
+	$(MAKE) $(TARGET) CUDA=0
+	./$(TARGET)
+	rm -rf $(OBJ_DIR)
 
-# Test executable
-$(TEST_TARGET): $(TEST_OBJ) $(OBJ_FILES)
-	$(CXX) $(TEST_OBJ) $(OBJ_FILES) $(LDFLAGS) -o $(TEST_TARGET) $(LDLIBS)
+# Run with CUDA (USE_CUDA flag enabled)
+run-cuda:
+	$(MAKE) clean CUDA=1
+	$(MAKE) $(TARGET) CUDA=1
+	./$(TARGET)
+	rm -rf $(OBJ_DIR)
 
-# Compile test file
-$(TEST_OBJ): $(TEST_FILE) | $(OBJ_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-# Run tests
-test: $(TEST_TARGET)
-	./$(TEST_TARGET)
-
-# Clean target - removes binaries and build directory
 clean:
-	rm -rf $(OBJ_DIR) $(TARGET) $(TEST_TARGET)
+	rm -rf $(OBJ_DIR) 
 
 # Phony targets
-.PHONY: all clean run test
+.PHONY: all clean run run-cpu run-cuda 
 
