@@ -36,31 +36,8 @@ static Tensor *tensor_unary_result(Tensor *a, const char *op_name) {
 }
 
 Tensor *tensor_add(Tensor *a, Tensor *b) {
-  if (a == NULL || b == NULL) {
-    fprintf(stderr, "Error: Tensor is NULL\n");
-    return NULL;
-  }
+  TENSOR_OPS_COMPATIBLE_CHECK(a, b);
 
-  if (a->ndim != b->ndim) {
-    fprintf(stderr, "Error: Tensor dimensions must match\n");
-    return NULL;
-  }
-  for (int i = 0; i < a->ndim; i++) {
-    if (a->shape[i] != b->shape[i]) {
-      fprintf(stderr, "Error: Tensor shapes must match\n");
-      return NULL;
-    }
-  }
-  if (a->data == NULL || b->data == NULL || a->grad == NULL ||
-      b->grad == NULL) {
-    fprintf(stderr, "Error: Tensor data or grad arrays are NULL\n");
-    return NULL;
-  }
-
-  if (a->device != b->device) {
-    fprintf(stderr, "Error: Both tensor devices should match\n");
-    return NULL;
-  }
   Tensor *result = tensor_create(a->ndim, a->shape, a->device);
 
   if (a->device == DEVICE_GPU) {
@@ -68,8 +45,8 @@ Tensor *tensor_add(Tensor *a, Tensor *b) {
     tensor_add_cuda((const float *)a->d_data, (const float *)b->d_data,
                     (float *)result->d_data, a->capacity);
 #else
-    fprintf(stderr, "Error: Device is GPU but USE_CUDA Not used\n");
-    return NULL;
+    ERROR_RETURN_NULL(
+        "Error: Device is GPU but Not compiled using CUDA Flag\n");
 #endif
   } else {
     for (int i = 0; i < a->capacity; i++) {
