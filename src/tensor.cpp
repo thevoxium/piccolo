@@ -113,8 +113,8 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
 
   if (device == DEVICE_GPU) {
 #ifdef USE_CUDA
-    CHECK_CUDA(cudaMalloc(&t->d_data, capacity * sizeof(float)));
-    CHECK_CUDA(cudaMalloc(&t->d_grad, capacity * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&t->d_data, capacity * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&t->d_grad, capacity * sizeof(float)));
 #else
     fprintf(
         stderr,
