@@ -57,12 +57,20 @@ Tensor *tensor_add(Tensor *a, Tensor *b) {
   result->_parents[0] = (Tensor *)a;
   result->_parents[1] = (Tensor *)b;
 
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      a->grad[i] += result->grad[i];
-      b->grad[i] += result->grad[i];
-    }
-  };
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_backward = [=]() {
+      cu_tensor_add_backward((float *)a->d_grad, (float *)b->d_grad, (const float *)result->d_grad, a->capacity);
+    };
+#endif
+  } else {
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        a->grad[i] += result->grad[i];
+        b->grad[i] += result->grad[i];
+      }
+    };
+  }
   return result;
 }
 
