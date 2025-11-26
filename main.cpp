@@ -17,15 +17,8 @@ int main() {
     Tensor *pred = tensor_add(z, b);
     Tensor *loss = loss_mse(pred, y);
     backward(loss);
-    
-    // Free old tensors before reassignment to prevent memory leaks
-    Tensor *w_old = w;
-    Tensor *b_old = b;
     w = tensor_sub(w, tensor_scale(w, 0.01f));
     b = tensor_sub(b, tensor_scale(b, 0.01f));
-    tensor_free(w_old);
-    tensor_free(b_old);
-    
     std::cout << "Epoch " << i << " Loss: " << loss->data[0] << std::endl;
     tensor_free(z);
     tensor_free(pred);
