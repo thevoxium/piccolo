@@ -160,6 +160,16 @@ Tensor *tensor_random(int ndim, int *shape, Device device) {
     t->data[i] = (float)rand() / (float)RAND_MAX;
   }
 
+  // If device is GPU, copy the random data to GPU memory
+  if (device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float), cudaMemcpyHostToDevice));
+#else
+    fprintf(stderr, "Error: Device is GPU but USE_CUDA not used\n");
+    return NULL;
+#endif
+  }
+
   return t;
 }
 
