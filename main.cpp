@@ -17,8 +17,19 @@ int main() {
     Tensor *pred = tensor_add(z, b);
     Tensor *loss = loss_mse(pred, y);
     backward(loss);
-    w = tensor_sub(w, tensor_scale(w, 0.01f));
-    b = tensor_sub(b, tensor_scale(b, 0.01f));
+    
+    // Update parameters in-place to keep them as leaf nodes
+    // and prevent the computation graph from growing indefinitely
+    float learning_rate = 0.01f;
+    for (int j = 0; j < w->capacity; j++) {
+        w->data[j] -= learning_rate * w->grad[j];
+        w->grad[j] = 0.0f; // Zero gradients for next epoch
+    }
+    for (int j = 0; j < b->capacity; j++) {
+        b->data[j] -= learning_rate * b->grad[j];
+        b->grad[j] = 0.0f; // Zero gradients for next epoch
+    }
+    
     std::cout << "Epoch " << i << " Loss: " << loss->data[0] << std::endl;
     tensor_free(z);
     tensor_free(pred);
