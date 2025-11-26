@@ -3,6 +3,7 @@
 #include "cuda_ops.hpp"
 #include "cuda_utils.hpp"
 #include <cuda_runtime.h>
+#include <stdio.h>
 
 // CUDA kernel for element-wise addition
 __global__ void tensor_add_kernel(const float *a, const float *b, float *result, int size) {

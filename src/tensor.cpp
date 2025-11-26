@@ -115,6 +115,8 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
 #ifdef USE_CUDA
     CUDA_CHECK(cudaMalloc(&t->d_data, capacity * sizeof(float)));
     CUDA_CHECK(cudaMalloc(&t->d_grad, capacity * sizeof(float)));
+    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, capacity * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, capacity * sizeof(float), cudaMemcpyHostToDevice));
 #else
     fprintf(stderr, "Warning: CUDA is not available, allocate it on CPU\n");
     return NULL;
