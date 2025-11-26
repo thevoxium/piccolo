@@ -33,7 +33,7 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
     capacity *= shape[i];
   }
 
-  Tensor *t = (Tensor *)malloc(sizeof(Tensor));
+  Tensor *t = new Tensor();
   if (t == NULL) {
     fprintf(stderr, "Error: Failed to allocate memory for Tensor\n");
     return NULL;
@@ -42,7 +42,7 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
   t->data = (float *)malloc(capacity * sizeof(float));
   if (t->data == NULL) {
     fprintf(stderr, "Error: Failed to allocate memory for data\n");
-    free(t);
+    delete t;
     return NULL;
   }
 
@@ -51,7 +51,7 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
   if (t->shape == NULL) {
     fprintf(stderr, "Error: Failed to allocate memory for shape\n");
     free(t->data);
-    free(t);
+    delete t;
     return NULL;
   }
   memcpy(t->shape, shape, ndim * sizeof(int));
@@ -62,7 +62,7 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
     fprintf(stderr, "Error: Failed to allocate memory for strides\n");
     free(t->shape);
     free(t->data);
-    free(t);
+    delete t;
     return NULL;
   }
 
@@ -82,7 +82,7 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
     free(t->strides);
     free(t->shape);
     free(t->data);
-    free(t);
+    delete t;
     return NULL;
   }
   t->_parents[0] = NULL;
@@ -96,7 +96,7 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
     free(t->strides);
     free(t->shape);
     free(t->data);
-    free(t);
+    delete t;
     return NULL;
   }
   memset(t->grad, 0, capacity * sizeof(float));
@@ -191,7 +191,7 @@ void tensor_free(Tensor *t) {
   if (t->grad != NULL) {
     free(t->grad);
   }
-  free(t);
+  delete t;
 }
 
 std::ostream &operator<<(std::ostream &os, const Tensor &t) {
