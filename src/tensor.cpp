@@ -116,10 +116,8 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
     CUDA_CHECK(cudaMalloc(&t->d_data, capacity * sizeof(float)));
     CUDA_CHECK(cudaMalloc(&t->d_grad, capacity * sizeof(float)));
 #else
-    fprintf(
-        stderr,
-        "Warning: CUDA is not available. Falling back to CPU allocation.\n");
-    t->device = DEVICE_CPU;
+    fprintf(stderr, "Warning: CUDA is not available, allocate it on CPU\n");
+    return NULL;
 #endif
   }
 
@@ -198,6 +196,17 @@ void tensor_free(Tensor *t) {
   if (t->grad != NULL) {
     free(t->grad);
   }
+
+  if (t->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    CUDA_CHECK(cudaFree(t->d_data));
+    CUDA_CHECK(cudaFree(t->d_grad));
+#else
+    fprintf(stderr,
+            "Device is GPU but USE CUDA not used to compile the project\n");
+#endif
+  }
+
   delete t;
 }
 
@@ -247,7 +256,8 @@ std::ostream &operator<<(std::ostream &os, const Tensor &t) {
     if (i < t.ndim - 1)
       os << ", ";
   }
-  os << "))";
+  os << ")), Device \n";
+  os << t.device << "\n";
 
   return os;
 }
