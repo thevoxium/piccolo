@@ -1,20 +1,22 @@
 #include "src/engine.hpp"
-#include "src/loss.hpp"
 #include "src/tensor.hpp"
 #include "src/tensor_ops.hpp"
-#include <iostream>
 
 int main() {
-  Tensor *x = tensor_random(2, new int[2]{1000, 1}, DEVICE_GPU);
+  Tensor *x = tensor_ones(2, new int[2]{1000, 1}, DEVICE_GPU);
   Tensor *y = tensor_random(2, new int[2]{1000, 1}, DEVICE_GPU);
 
-  Tensor *z = tensor_add(x, y);
+  Tensor *z = tensor_ones(2, new int[2]{1000, 1}, DEVICE_GPU);
 
-  std::cout << *z << std::endl;
+  Tensor *r = tensor_add(x, y);
+  Tensor *s = tensor_sub(r, z);
 
-  tensor_free(x);
-  tensor_free(y);
-  tensor_free(z);
+  backward(s);
+
+  std::cout << *s << std::endl;
+
+  free_graph(s);
+
   // Tensor *x = tensor_random(2, new int[2]{1000, 1}, DEVICE_GPU);
   // Tensor *y = tensor_sin(x);
   //
