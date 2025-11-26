@@ -115,10 +115,10 @@ Tensor *tensor_ones(int ndim, int *shape, Device device) {
 
   if (t->device == DEVICE_GPU) {
 #ifdef USE_CUDA
-    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float)),
-               cudaMemcpyHostToDevice);
-    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float)),
-               cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float),
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
+                          cudaMemcpyHostToDevice));
 #else
     ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
     t->device = DEVICE_CPU;
@@ -136,10 +136,10 @@ Tensor *tensor_zeroes(int ndim, int *shape, Device device) {
 
   if (t->device == DEVICE_GPU) {
 #ifdef USE_CUDA
-    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float)),
-               cudaMemcpyHostToDevice);
-    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float)),
-               cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float),
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
+                          cudaMemcpyHostToDevice));
 #else
     ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
     t->device = DEVICE_CPU;
@@ -159,10 +159,10 @@ Tensor *tensor_random(int ndim, int *shape, Device device) {
 
   if (t->device == DEVICE_GPU) {
 #ifdef USE_CUDA
-    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float)),
-               cudaMemcpyHostToDevice);
-    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float)),
-               cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float),
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
+                          cudaMemcpyHostToDevice));
 #else
     ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
     t->device = DEVICE_CPU;
@@ -184,10 +184,10 @@ Tensor *tensor_from_data(int ndim, int *shape, float *data, Device device) {
 
   if (t->device == DEVICE_GPU) {
 #ifdef USE_CUDA
-    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float)),
-               cudaMemcpyHostToDevice);
-    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float)),
-               cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float),
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
+                          cudaMemcpyHostToDevice));
 #else
     ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
     t->device = DEVICE_CPU;
