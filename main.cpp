@@ -21,8 +21,8 @@ int main() {
   Tensor *b = tensor_random(2, b_shape, DEVICE_GPU);
   realize(b);
 
-  int epochs = 100;
-  float learning_rate = 0.01f;
+  int epochs = 1000;
+  float learning_rate = 0.001f;
 
   for (int i = 0; i < epochs; i++) {
     // Zero gradients BEFORE backward pass to prevent accumulation
