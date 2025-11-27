@@ -84,11 +84,15 @@ Tensor *tensor_sub(Tensor *a, Tensor *b) {
 
   result->_parents[0] = (Tensor *)a;
   result->_parents[1] = (Tensor *)b;
+  realize(a);
+  realize(b);
 
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
-    cu_tensor_sub((const float *)a->d_data, (const float *)b->d_data,
-                  (float *)result->d_data, a->capacity);
+    result->_forward = [=]() {
+      cu_tensor_sub((const float *)a->d_data, (const float *)b->d_data,
+                    (float *)result->d_data, a->capacity);
+    };
     result->_backward = [=]() {
       cu_tensor_sub_backward((float *)a->d_grad, (float *)b->d_grad,
                              (const float *)result->d_grad, a->capacity);
@@ -98,9 +102,11 @@ Tensor *tensor_sub(Tensor *a, Tensor *b) {
         "Error: Device is GPU but Not compiled using CUDA Flag\n");
 #endif
   } else {
-    for (int i = 0; i < a->capacity; i++) {
-      result->data[i] = a->data[i] - b->data[i];
-    }
+    result->_forward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        result->data[i] = a->data[i] - b->data[i];
+      }
+    };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
         a->grad[i] -= result->grad[i];
