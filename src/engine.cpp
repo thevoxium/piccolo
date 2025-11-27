@@ -32,6 +32,8 @@ void backward(Tensor *root) {
   std::vector<Tensor *> topo;
   build_topological_order(root, topo);
 
+  realize(root);
+
   // Initialize root gradient to 1.0f for each element
 #ifdef USE_CUDA
   if (root->device == DEVICE_GPU) {
@@ -56,7 +58,6 @@ void backward(Tensor *root) {
 
   for (Tensor *t : topo) {
     if (t != NULL && t->_backward) {
-      realize(t);
       t->_backward();
     }
   }

@@ -81,6 +81,8 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
   t->_backward = NULL;
   t->_forward = NULL;
   t->_realized = false;
+  t->_host_dirty = false;
+  t->_device_dirty = false;
 
   t->grad = (float *)malloc(capacity * sizeof(float));
   if (t->grad == NULL) {
@@ -124,6 +126,8 @@ Tensor *tensor_ones(int ndim, int *shape, Device device) {
                           cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
                           cudaMemcpyHostToDevice));
+    t->_host_dirty = false;
+    t->_device_dirty = false;
 #else
     ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
     t->device = DEVICE_CPU;
@@ -145,6 +149,8 @@ Tensor *tensor_zeroes(int ndim, int *shape, Device device) {
                           cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
                           cudaMemcpyHostToDevice));
+    t->_host_dirty = false;
+    t->_device_dirty = false;
 #else
     ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
     t->device = DEVICE_CPU;
@@ -168,6 +174,8 @@ Tensor *tensor_random(int ndim, int *shape, Device device) {
                           cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
                           cudaMemcpyHostToDevice));
+    t->_host_dirty = false;
+    t->_device_dirty = false;
 #else
     ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
     t->device = DEVICE_CPU;
@@ -193,6 +201,8 @@ Tensor *tensor_from_data(int ndim, int *shape, float *data, Device device) {
                           cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
                           cudaMemcpyHostToDevice));
+    t->_host_dirty = false;
+    t->_device_dirty = false;
 #else
     ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
     t->device = DEVICE_CPU;
@@ -246,6 +256,16 @@ void realize(Tensor *t) {
   }
 }
 
+void ensure_realized(Tensor *t) {
+  if (t == NULL) {
+    ERROR_MSG("Error: ensure_realized called with NULL tensor\n");
+    return;
+  }
+  if (!t->_realized) {
+    realize(t);
+  }
+}
+
 void tensor_free(Tensor *t) {
   if (t == NULL) {
     return;
@@ -284,8 +304,15 @@ void sync_to_host(Tensor *t) {
     return;
   }
 
+  ensure_realized(t);
+
   if (t->device != DEVICE_GPU) {
     // Nothing to sync - tensor is already on CPU
+    return;
+  }
+
+  if (!t->_host_dirty) {
+    // Host already has the latest view
     return;
   }
 
@@ -298,6 +325,8 @@ void sync_to_host(Tensor *t) {
     CUDA_CHECK(cudaMemcpy(t->grad, t->d_grad, t->capacity * sizeof(float),
                           cudaMemcpyDeviceToHost));
   }
+  t->_host_dirty = false;
+  t->_device_dirty = true;
 #else
   ERROR_MSG("Error: sync_to_host called but not built with CUDA\n");
 #endif
@@ -314,6 +343,11 @@ void sync_to_device(Tensor *t) {
     return;
   }
 
+  if (!t->_device_dirty) {
+    // Device already has the latest view
+    return;
+  }
+
 #ifdef USE_CUDA
   if (t->data != NULL && t->d_data != NULL) {
     CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float),
@@ -323,6 +357,7 @@ void sync_to_device(Tensor *t) {
     CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
                           cudaMemcpyHostToDevice));
   }
+  t->_device_dirty = false;
 #else
   ERROR_MSG("Error: sync_to_device called but not built with CUDA\n");
 #endif
@@ -416,6 +451,8 @@ static void set_tensor_device(Tensor *t, Device device) {
     } else {
       CUDA_CHECK(cudaMemset(t->d_grad, 0, t->capacity * sizeof(float)));
     }
+    t->_device_dirty = false;
+    t->_host_dirty = false;
 #else
     ERROR_MSG("Error: Cannot set device to GPU - not built with CUDA\n");
     t->device = DEVICE_CPU;
@@ -440,6 +477,8 @@ static void set_tensor_device(Tensor *t, Device device) {
       CUDA_CHECK(cudaFree(t->d_grad));
       t->d_grad = NULL;
     }
+    t->_host_dirty = false;
+    t->_device_dirty = false;
 #else
     ERROR_MSG("Error: Cannot move from GPU - not built with CUDA\n");
 #endif

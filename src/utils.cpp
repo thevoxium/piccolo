@@ -57,6 +57,8 @@ std::ostream &operator<<(std::ostream &os, const Tensor &t) {
     return os;
   }
 
+  ensure_realized(const_cast<Tensor *>(&t));
+
   // Get CPU data pointer (handles GPU copy if needed)
   float *temp_buffer = nullptr;
   const float *data = get_cpu_data(t, &temp_buffer);

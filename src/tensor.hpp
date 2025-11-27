@@ -35,6 +35,8 @@ typedef struct Tensor {
   std::function<void()> _backward;
   std::function<void()> _forward;
   bool _realized;
+  bool _host_dirty;
+  bool _device_dirty;
 
 #ifdef USE_CUDA
   float *d_data;
@@ -55,6 +57,7 @@ Tensor *tensor_from_data(int ndim, int *shape, float *data,
 
 // Realize the tensor and all its dependencies in the computation graph
 void realize(Tensor *t);
+void ensure_realized(Tensor *t);
 
 // Set device for the entire computation graph rooted at t
 void set_graph_device(Tensor *root, Device device);

@@ -15,6 +15,16 @@ extern "C" {
 #error "cblas interface not available"
 #endif
 
+static inline void mark_gpu_forward_result(Tensor *t) {
+  t->_host_dirty = true;
+  t->_device_dirty = false;
+}
+
+static inline void mark_cpu_forward_result(Tensor *t) {
+  t->_host_dirty = false;
+  t->_device_dirty = (t->device == DEVICE_GPU);
+}
+
 static Tensor *tensor_unary_result(Tensor *a, const char *op_name) {
   if (a == NULL) {
     fprintf(stderr, "Error (%s): Tensor is NULL\n", op_name);
@@ -49,6 +59,7 @@ Tensor *tensor_add(Tensor *a, Tensor *b) {
     result->_forward = [=]() {
       cu_tensor_add((const float *)a->d_data, (const float *)b->d_data,
                     (float *)result->d_data, a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_add_backward((float *)a->d_grad, (float *)b->d_grad,
@@ -63,6 +74,7 @@ Tensor *tensor_add(Tensor *a, Tensor *b) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = a->data[i] + b->data[i];
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
@@ -88,6 +100,7 @@ Tensor *tensor_sub(Tensor *a, Tensor *b) {
     result->_forward = [=]() {
       cu_tensor_sub((const float *)a->d_data, (const float *)b->d_data,
                     (float *)result->d_data, a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_sub_backward((float *)a->d_grad, (float *)b->d_grad,
@@ -102,6 +115,7 @@ Tensor *tensor_sub(Tensor *a, Tensor *b) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = a->data[i] - b->data[i];
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
@@ -136,6 +150,7 @@ Tensor *tensor_scale(Tensor *a, float k) {
     result->_forward = [=]() {
       cu_tensor_scale((const float *)a->d_data, (float *)result->d_data, k,
                       a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_scale_backward((float *)a->d_grad,
@@ -150,6 +165,7 @@ Tensor *tensor_scale(Tensor *a, float k) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = k * a->data[i];
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
@@ -202,6 +218,7 @@ Tensor *tensor_dot(Tensor *a, Tensor *b) {
     result->_forward = [=]() {
       cu_tensor_dot((const float *)a->d_data, (const float *)b->d_data,
                     (float *)result->d_data, a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       float grad_val;
@@ -222,6 +239,7 @@ Tensor *tensor_dot(Tensor *a, Tensor *b) {
         dot_result += a->data[i] * b->data[i];
       }
       result->data[0] = dot_result;
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       float grad_val = result->grad[0];
@@ -278,6 +296,7 @@ Tensor *tensor_mm(Tensor *a, Tensor *b) {
     result->_forward = [=]() {
       cu_tensor_mm((const float *)a->d_data, (const float *)b->d_data,
                    (float *)result->d_data, m, k, n);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_mm_backward((float *)a->d_grad, (float *)b->d_grad,
@@ -292,6 +311,7 @@ Tensor *tensor_mm(Tensor *a, Tensor *b) {
     result->_forward = [=]() {
       cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1.0f,
                   a->data, k, b->data, n, 0.0f, result->data, n);
+      mark_cpu_forward_result(result);
     };
 
     result->_backward = [=]() {
@@ -320,6 +340,7 @@ Tensor *tensor_neg(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_neg((const float *)a->d_data, (float *)result->d_data,
                     a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_neg_backward((float *)a->d_grad, (const float *)result->d_grad,
@@ -335,6 +356,7 @@ Tensor *tensor_neg(Tensor *a) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = -a->data[i];
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
@@ -356,6 +378,7 @@ Tensor *tensor_log2(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_log2((const float *)a->d_data, (float *)result->d_data,
                      a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_log2_backward((float *)a->d_grad, (const float *)a->d_data,
@@ -380,6 +403,7 @@ Tensor *tensor_log2(Tensor *a) {
           result->data[i] = log2f(val);
         }
       }
+      mark_cpu_forward_result(result);
     };
     const float ln2 = logf(2.0f);
     result->_backward = [=]() {
@@ -406,6 +430,7 @@ Tensor *tensor_exp2(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_exp2((const float *)a->d_data, (float *)result->d_data,
                      a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_exp2_backward((float *)a->d_grad,
@@ -422,6 +447,7 @@ Tensor *tensor_exp2(Tensor *a) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = exp2f(a->data[i]);
       }
+      mark_cpu_forward_result(result);
     };
     const float ln2 = logf(2.0f);
     result->_backward = [=]() {
@@ -444,6 +470,7 @@ Tensor *tensor_sqrt(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_sqrt((const float *)a->d_data, (float *)result->d_data,
                      a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_sqrt_backward((float *)a->d_grad, (const float *)a->d_data,
@@ -469,6 +496,7 @@ Tensor *tensor_sqrt(Tensor *a) {
           result->data[i] = sqrtf(val);
         }
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
@@ -495,6 +523,7 @@ Tensor *tensor_sin(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_sin((const float *)a->d_data, (float *)result->d_data,
                     a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_sin_backward((float *)a->d_grad, (const float *)a->d_data,
@@ -510,6 +539,7 @@ Tensor *tensor_sin(Tensor *a) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = sinf(a->data[i]);
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
@@ -531,6 +561,7 @@ Tensor *tensor_cos(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_cos((const float *)a->d_data, (float *)result->d_data,
                     a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_cos_backward((float *)a->d_grad, (const float *)a->d_data,
@@ -546,6 +577,7 @@ Tensor *tensor_cos(Tensor *a) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = cosf(a->data[i]);
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
@@ -567,6 +599,7 @@ Tensor *tensor_tan(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_tan((const float *)a->d_data, (float *)result->d_data,
                     a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_tan_backward((float *)a->d_grad,
@@ -583,6 +616,7 @@ Tensor *tensor_tan(Tensor *a) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = tanf(a->data[i]);
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
@@ -605,6 +639,7 @@ Tensor *tensor_trunc(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_trunc((const float *)a->d_data, (float *)result->d_data,
                       a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = []() {};
 #else
@@ -617,6 +652,7 @@ Tensor *tensor_trunc(Tensor *a) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = truncf(a->data[i]);
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = []() {};
   }
@@ -634,6 +670,7 @@ Tensor *tensor_ceil(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_ceil((const float *)a->d_data, (float *)result->d_data,
                      a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = []() {};
 #else
@@ -646,6 +683,7 @@ Tensor *tensor_ceil(Tensor *a) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = ceilf(a->data[i]);
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = []() {};
   }
@@ -663,6 +701,7 @@ Tensor *tensor_floor(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_floor((const float *)a->d_data, (float *)result->d_data,
                       a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = []() {};
 #else
@@ -675,6 +714,7 @@ Tensor *tensor_floor(Tensor *a) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = floorf(a->data[i]);
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = []() {};
   }
@@ -692,6 +732,7 @@ Tensor *tensor_round(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_round((const float *)a->d_data, (float *)result->d_data,
                       a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = []() {};
 #else
@@ -704,6 +745,7 @@ Tensor *tensor_round(Tensor *a) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = roundf(a->data[i]);
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = []() {};
   }
@@ -721,6 +763,7 @@ Tensor *tensor_square(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_square((const float *)a->d_data, (float *)result->d_data,
                        a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_square_backward((float *)a->d_grad, (const float *)a->d_data,
@@ -737,6 +780,7 @@ Tensor *tensor_square(Tensor *a) {
         float val = a->data[i];
         result->data[i] = val * val;
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
@@ -758,6 +802,7 @@ Tensor *tensor_sign(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_sign((const float *)a->d_data, (float *)result->d_data,
                      a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = []() {};
 #else
@@ -771,6 +816,7 @@ Tensor *tensor_sign(Tensor *a) {
         float val = a->data[i];
         result->data[i] = (val > 0.0f) ? 1.0f : ((val < 0.0f) ? -1.0f : 0.0f);
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = []() {};
   }
@@ -788,6 +834,7 @@ Tensor *tensor_abs(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_abs((const float *)a->d_data, (float *)result->d_data,
                     a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_abs_backward((float *)a->d_grad, (const float *)a->d_data,
@@ -803,6 +850,7 @@ Tensor *tensor_abs(Tensor *a) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = fabsf(a->data[i]);
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
@@ -831,6 +879,7 @@ Tensor *tensor_reciprocal(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_reciprocal((const float *)a->d_data, (float *)result->d_data,
                            a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_reciprocal_backward((float *)a->d_grad,
@@ -853,6 +902,7 @@ Tensor *tensor_reciprocal(Tensor *a) {
           result->data[i] = 1.0f / val;
         }
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
@@ -879,6 +929,7 @@ Tensor *tensor_pow(Tensor *a, float exponent) {
     result->_forward = [=]() {
       cu_tensor_pow((const float *)a->d_data, (float *)result->d_data, exponent,
                     a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_pow_backward((float *)a->d_grad, (const float *)a->d_data,
@@ -895,6 +946,7 @@ Tensor *tensor_pow(Tensor *a, float exponent) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = powf(a->data[i], exponent);
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
@@ -929,6 +981,7 @@ Tensor *tensor_exp(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_exp((const float *)a->d_data, (float *)result->d_data,
                     a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_exp_backward((float *)a->d_grad,
@@ -945,6 +998,7 @@ Tensor *tensor_exp(Tensor *a) {
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = expf(a->data[i]);
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
@@ -966,6 +1020,7 @@ Tensor *tensor_log(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_log((const float *)a->d_data, (float *)result->d_data,
                     a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       cu_tensor_log_backward((float *)a->d_grad, (const float *)a->d_data,
@@ -990,6 +1045,7 @@ Tensor *tensor_log(Tensor *a) {
           result->data[i] = logf(val);
         }
       }
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
@@ -1029,6 +1085,7 @@ Tensor *tensor_aggregate(Tensor *a) {
     result->_forward = [=]() {
       cu_tensor_aggregate((const float *)a->d_data, (float *)result->d_data,
                           a->capacity);
+      mark_gpu_forward_result(result);
     };
     result->_backward = [=]() {
       float grad_val;
@@ -1048,6 +1105,7 @@ Tensor *tensor_aggregate(Tensor *a) {
         sum += a->data[i];
       }
       result->data[0] = sum;
+      mark_cpu_forward_result(result);
     };
     result->_backward = [=]() {
       float grad_val = result->grad[0];

@@ -3,3 +3,4 @@ build/
 .clangd
 piccolo
 test_runner
+issues.md
