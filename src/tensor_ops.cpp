@@ -25,7 +25,7 @@ static Tensor *tensor_unary_result(Tensor *a, const char *op_name) {
             op_name);
     return NULL;
   }
-  Tensor *result = tensor_create(a->ndim, a->shape);
+  Tensor *result = tensor_create(a->ndim, a->shape, a->device);
   if (result == NULL) {
     fprintf(stderr, "Error (%s): Failed to create result tensor\n", op_name);
     return NULL;
@@ -113,7 +113,7 @@ Tensor *tensor_sub(Tensor *a, Tensor *b) {
     };
     result->_backward = [=]() {
       for (int i = 0; i < a->capacity; i++) {
-        a->grad[i] -= result->grad[i];
+        a->grad[i] += result->grad[i];
         b->grad[i] -= result->grad[i];
       }
     };
@@ -131,22 +131,42 @@ Tensor *tensor_scale(Tensor *a, float k) {
     fprintf(stderr, "Error: Tensor data or grad arrays are NULL\n");
     return NULL;
   }
-  Tensor *result = tensor_create(a->ndim, a->shape);
+  Tensor *result = tensor_create(a->ndim, a->shape, a->device);
   if (result == NULL) {
     return NULL;
-  }
-  for (int i = 0; i < a->capacity; i++) {
-    result->data[i] = k * a->data[i];
   }
 
   result->_parents[0] = (Tensor *)a;
   result->_parents[1] = NULL;
 
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      a->grad[i] += k * result->grad[i];
-    }
-  };
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_scale((const float *)a->d_data, (float *)result->d_data, k,
+                      a->capacity);
+    };
+    result->_backward = [=]() {
+      cu_tensor_scale_backward((float *)a->d_grad,
+                               (const float *)result->d_grad, k, a->capacity);
+    };
+#else
+    ERROR_RETURN_NULL(
+        "Error: Device is GPU but Not compiled using CUDA Flag\n");
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        result->data[i] = k * a->data[i];
+      }
+    };
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        a->grad[i] += k * result->grad[i];
+      }
+    };
+  }
   return result;
 }
 
@@ -173,28 +193,58 @@ Tensor *tensor_dot(Tensor *a, Tensor *b) {
     return NULL;
   }
 
-  float dot_result = 0.0f;
-  for (int i = 0; i < a->capacity; i++) {
-    dot_result += a->data[i] * b->data[i];
+  if (a->device != b->device) {
+    fprintf(stderr, "Error: Tensor devices do not match\n");
+    return NULL;
   }
 
   int result_shape[] = {1};
-  Tensor *result = tensor_create(1, result_shape);
+  Tensor *result = tensor_create(1, result_shape, a->device);
   if (result == NULL) {
     return NULL;
   }
-  result->data[0] = dot_result;
 
   result->_parents[0] = (Tensor *)a;
   result->_parents[1] = (Tensor *)b;
 
-  result->_backward = [=]() {
-    float grad_val = result->grad[0];
-    for (int i = 0; i < a->capacity; i++) {
-      a->grad[i] += b->data[i] * grad_val;
-      b->grad[i] += a->data[i] * grad_val;
-    }
-  };
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      realize(b);
+      cu_tensor_dot((const float *)a->d_data, (const float *)b->d_data,
+                    (float *)result->d_data, a->capacity);
+    };
+    result->_backward = [=]() {
+      float grad_val;
+      cudaMemcpy(&grad_val, result->d_grad, sizeof(float),
+                 cudaMemcpyDeviceToHost);
+      cu_tensor_dot_backward((float *)a->d_grad, (float *)b->d_grad,
+                             (const float *)a->d_data, (const float *)b->d_data,
+                             grad_val, a->capacity);
+    };
+#else
+    ERROR_RETURN_NULL(
+        "Error: Device is GPU but Not compiled using CUDA Flag\n");
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      realize(b);
+      float dot_result = 0.0f;
+      for (int i = 0; i < a->capacity; i++) {
+        dot_result += a->data[i] * b->data[i];
+      }
+      result->data[0] = dot_result;
+    };
+    result->_backward = [=]() {
+      float grad_val = result->grad[0];
+      for (int i = 0; i < a->capacity; i++) {
+        a->grad[i] += b->data[i] * grad_val;
+        b->grad[i] += a->data[i] * grad_val;
+      }
+    };
+  }
   return result;
 }
 
@@ -282,14 +332,36 @@ Tensor *tensor_neg(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    result->data[i] = -a->data[i];
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_neg((const float *)a->d_data, (float *)result->d_data,
+                    a->capacity);
+    };
+    result->_backward = [=]() {
+      cu_tensor_neg_backward((float *)a->d_grad, (const float *)result->d_grad,
+                             a->capacity);
+    };
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        result->data[i] = -a->data[i];
+      }
+    };
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        a->grad[i] -= result->grad[i];
+      }
+    };
   }
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      a->grad[i] -= result->grad[i];
-    }
-  };
   return result;
 }
 
@@ -298,28 +370,50 @@ Tensor *tensor_log2(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    float val = a->data[i];
-    if (val <= 0.0f) {
-      fprintf(stderr,
-              "Warning (tensor_log2): log2 undefined for non-positive values, "
-              "got %f\n",
-              val);
-      result->data[i] = -INFINITY;
-    } else {
-      result->data[i] = log2f(val);
-    }
-  }
-  const float ln2 = logf(2.0f);
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      float val = a->data[i];
-      if (val <= 0.0f) {
-        continue;
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_log2((const float *)a->d_data, (float *)result->d_data,
+                     a->capacity);
+    };
+    result->_backward = [=]() {
+      cu_tensor_log2_backward((float *)a->d_grad, (const float *)a->d_data,
+                              (const float *)result->d_grad, a->capacity);
+    };
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        float val = a->data[i];
+        if (val <= 0.0f) {
+          fprintf(stderr,
+                  "Warning (tensor_log2): log2 undefined for non-positive "
+                  "values, got %f\n",
+                  val);
+          result->data[i] = -INFINITY;
+        } else {
+          result->data[i] = log2f(val);
+        }
       }
-      a->grad[i] += result->grad[i] / (val * ln2);
-    }
-  };
+    };
+    const float ln2 = logf(2.0f);
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        float val = a->data[i];
+        if (val <= 0.0f) {
+          continue;
+        }
+        a->grad[i] += result->grad[i] / (val * ln2);
+      }
+    };
+  }
   return result;
 }
 
@@ -328,15 +422,38 @@ Tensor *tensor_exp2(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    result->data[i] = exp2f(a->data[i]);
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_exp2((const float *)a->d_data, (float *)result->d_data,
+                     a->capacity);
+    };
+    result->_backward = [=]() {
+      cu_tensor_exp2_backward((float *)a->d_grad,
+                              (const float *)result->d_data,
+                              (const float *)result->d_grad, a->capacity);
+    };
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        result->data[i] = exp2f(a->data[i]);
+      }
+    };
+    const float ln2 = logf(2.0f);
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        a->grad[i] += result->grad[i] * result->data[i] * ln2;
+      }
+    };
   }
-  const float ln2 = logf(2.0f);
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      a->grad[i] += result->grad[i] * result->data[i] * ln2;
-    }
-  };
   return result;
 }
 
@@ -345,28 +462,51 @@ Tensor *tensor_sqrt(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    float val = a->data[i];
-    if (val < 0.0f) {
-      fprintf(
-          stderr,
-          "Warning (tensor_sqrt): sqrt undefined for negative values, got %f\n",
-          val);
-      result->data[i] = NAN;
-    } else {
-      result->data[i] = sqrtf(val);
-    }
-  }
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      float val = a->data[i];
-      if (val <= 0.0f || result->data[i] == 0.0f) {
-        continue;
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_sqrt((const float *)a->d_data, (float *)result->d_data,
+                     a->capacity);
+    };
+    result->_backward = [=]() {
+      cu_tensor_sqrt_backward((float *)a->d_grad, (const float *)a->d_data,
+                              (const float *)result->d_data,
+                              (const float *)result->d_grad, a->capacity);
+    };
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        float val = a->data[i];
+        if (val < 0.0f) {
+          fprintf(stderr,
+                  "Warning (tensor_sqrt): sqrt undefined for negative values, "
+                  "got %f\n",
+                  val);
+          result->data[i] = NAN;
+        } else {
+          result->data[i] = sqrtf(val);
+        }
       }
-      float local_grad = 0.5f / result->data[i];
-      a->grad[i] += result->grad[i] * local_grad;
-    }
-  };
+    };
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        float val = a->data[i];
+        if (val <= 0.0f || result->data[i] == 0.0f) {
+          continue;
+        }
+        float local_grad = 0.5f / result->data[i];
+        a->grad[i] += result->grad[i] * local_grad;
+      }
+    };
+  }
   return result;
 }
 
@@ -375,14 +515,36 @@ Tensor *tensor_sin(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    result->data[i] = sinf(a->data[i]);
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_sin((const float *)a->d_data, (float *)result->d_data,
+                    a->capacity);
+    };
+    result->_backward = [=]() {
+      cu_tensor_sin_backward((float *)a->d_grad, (const float *)a->d_data,
+                             (const float *)result->d_grad, a->capacity);
+    };
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        result->data[i] = sinf(a->data[i]);
+      }
+    };
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        a->grad[i] += result->grad[i] * cosf(a->data[i]);
+      }
+    };
   }
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      a->grad[i] += result->grad[i] * cosf(a->data[i]);
-    }
-  };
   return result;
 }
 
@@ -391,14 +553,36 @@ Tensor *tensor_cos(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    result->data[i] = cosf(a->data[i]);
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_cos((const float *)a->d_data, (float *)result->d_data,
+                    a->capacity);
+    };
+    result->_backward = [=]() {
+      cu_tensor_cos_backward((float *)a->d_grad, (const float *)a->d_data,
+                             (const float *)result->d_grad, a->capacity);
+    };
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        result->data[i] = cosf(a->data[i]);
+      }
+    };
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        a->grad[i] -= result->grad[i] * sinf(a->data[i]);
+      }
+    };
   }
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      a->grad[i] -= result->grad[i] * sinf(a->data[i]);
-    }
-  };
   return result;
 }
 
@@ -407,15 +591,38 @@ Tensor *tensor_tan(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    result->data[i] = tanf(a->data[i]);
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_tan((const float *)a->d_data, (float *)result->d_data,
+                    a->capacity);
+    };
+    result->_backward = [=]() {
+      cu_tensor_tan_backward((float *)a->d_grad,
+                             (const float *)result->d_data,
+                             (const float *)result->d_grad, a->capacity);
+    };
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        result->data[i] = tanf(a->data[i]);
+      }
+    };
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        float tangent = result->data[i];
+        a->grad[i] += result->grad[i] * (1.0f + tangent * tangent);
+      }
+    };
   }
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      float tangent = result->data[i];
-      a->grad[i] += result->grad[i] * (1.0f + tangent * tangent);
-    }
-  };
   return result;
 }
 
@@ -424,10 +631,29 @@ Tensor *tensor_trunc(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    result->data[i] = truncf(a->data[i]);
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_trunc((const float *)a->d_data, (float *)result->d_data,
+                      a->capacity);
+    };
+    result->_backward = []() {};
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        result->data[i] = truncf(a->data[i]);
+      }
+    };
+    result->_backward = []() {};
   }
-  result->_backward = []() {};
   return result;
 }
 
@@ -436,10 +662,29 @@ Tensor *tensor_ceil(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    result->data[i] = ceilf(a->data[i]);
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_ceil((const float *)a->d_data, (float *)result->d_data,
+                     a->capacity);
+    };
+    result->_backward = []() {};
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        result->data[i] = ceilf(a->data[i]);
+      }
+    };
+    result->_backward = []() {};
   }
-  result->_backward = []() {};
   return result;
 }
 
@@ -448,10 +693,29 @@ Tensor *tensor_floor(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    result->data[i] = floorf(a->data[i]);
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_floor((const float *)a->d_data, (float *)result->d_data,
+                      a->capacity);
+    };
+    result->_backward = []() {};
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        result->data[i] = floorf(a->data[i]);
+      }
+    };
+    result->_backward = []() {};
   }
-  result->_backward = []() {};
   return result;
 }
 
@@ -460,10 +724,29 @@ Tensor *tensor_round(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    result->data[i] = roundf(a->data[i]);
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_round((const float *)a->d_data, (float *)result->d_data,
+                      a->capacity);
+    };
+    result->_backward = []() {};
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        result->data[i] = roundf(a->data[i]);
+      }
+    };
+    result->_backward = []() {};
   }
-  result->_backward = []() {};
   return result;
 }
 
@@ -472,15 +755,37 @@ Tensor *tensor_square(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    float val = a->data[i];
-    result->data[i] = val * val;
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_square((const float *)a->d_data, (float *)result->d_data,
+                       a->capacity);
+    };
+    result->_backward = [=]() {
+      cu_tensor_square_backward((float *)a->d_grad, (const float *)a->d_data,
+                                (const float *)result->d_grad, a->capacity);
+    };
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        float val = a->data[i];
+        result->data[i] = val * val;
+      }
+    };
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        a->grad[i] += result->grad[i] * 2.0f * a->data[i];
+      }
+    };
   }
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      a->grad[i] += result->grad[i] * 2.0f * a->data[i];
-    }
-  };
   return result;
 }
 
@@ -489,11 +794,30 @@ Tensor *tensor_sign(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    float val = a->data[i];
-    result->data[i] = (val > 0.0f) ? 1.0f : ((val < 0.0f) ? -1.0f : 0.0f);
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_sign((const float *)a->d_data, (float *)result->d_data,
+                     a->capacity);
+    };
+    result->_backward = []() {};
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        float val = a->data[i];
+        result->data[i] = (val > 0.0f) ? 1.0f : ((val < 0.0f) ? -1.0f : 0.0f);
+      }
+    };
+    result->_backward = []() {};
   }
-  result->_backward = []() {};
   return result;
 }
 
@@ -502,21 +826,43 @@ Tensor *tensor_abs(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    result->data[i] = fabsf(a->data[i]);
-  }
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      float val = a->data[i];
-      float sign = 0.0f;
-      if (val > 0.0f) {
-        sign = 1.0f;
-      } else if (val < 0.0f) {
-        sign = -1.0f;
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_abs((const float *)a->d_data, (float *)result->d_data,
+                    a->capacity);
+    };
+    result->_backward = [=]() {
+      cu_tensor_abs_backward((float *)a->d_grad, (const float *)a->d_data,
+                             (const float *)result->d_grad, a->capacity);
+    };
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        result->data[i] = fabsf(a->data[i]);
       }
-      a->grad[i] += result->grad[i] * sign;
-    }
-  };
+    };
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        float val = a->data[i];
+        float sign = 0.0f;
+        if (val > 0.0f) {
+          sign = 1.0f;
+        } else if (val < 0.0f) {
+          sign = -1.0f;
+        }
+        a->grad[i] += result->grad[i] * sign;
+      }
+    };
+  }
   return result;
 }
 
@@ -525,25 +871,48 @@ Tensor *tensor_reciprocal(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    float val = a->data[i];
-    if (val == 0.0f) {
-      fprintf(stderr, "Warning (tensor_reciprocal): division by zero\n");
-      result->data[i] = INFINITY;
-    } else {
-      result->data[i] = 1.0f / val;
-    }
-  }
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      float val = a->data[i];
-      if (val == 0.0f) {
-        continue;
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_reciprocal((const float *)a->d_data, (float *)result->d_data,
+                           a->capacity);
+    };
+    result->_backward = [=]() {
+      cu_tensor_reciprocal_backward((float *)a->d_grad,
+                                    (const float *)a->d_data,
+                                    (const float *)result->d_grad, a->capacity);
+    };
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        float val = a->data[i];
+        if (val == 0.0f) {
+          fprintf(stderr, "Warning (tensor_reciprocal): division by zero\n");
+          result->data[i] = INFINITY;
+        } else {
+          result->data[i] = 1.0f / val;
+        }
       }
-      float local_grad = -1.0f / (val * val);
-      a->grad[i] += result->grad[i] * local_grad;
-    }
-  };
+    };
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        float val = a->data[i];
+        if (val == 0.0f) {
+          continue;
+        }
+        float local_grad = -1.0f / (val * val);
+        a->grad[i] += result->grad[i] * local_grad;
+      }
+    };
+  }
   return result;
 }
 
@@ -552,28 +921,50 @@ Tensor *tensor_pow(Tensor *a, float exponent) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    result->data[i] = powf(a->data[i], exponent);
-  }
-  const float exponent_copy = exponent;
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      float base = a->data[i];
-      float local_grad = 0.0f;
-      if (base == 0.0f) {
-        if (exponent_copy > 1.0f) {
-          local_grad = 0.0f;
-        } else if (exponent_copy == 1.0f) {
-          local_grad = 1.0f;
-        } else {
-          continue;
-        }
-      } else {
-        local_grad = exponent_copy * powf(base, exponent_copy - 1.0f);
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_pow((const float *)a->d_data, (float *)result->d_data, exponent,
+                    a->capacity);
+    };
+    result->_backward = [=]() {
+      cu_tensor_pow_backward((float *)a->d_grad, (const float *)a->d_data,
+                             (const float *)result->d_grad, exponent,
+                             a->capacity);
+    };
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        result->data[i] = powf(a->data[i], exponent);
       }
-      a->grad[i] += result->grad[i] * local_grad;
-    }
-  };
+    };
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        float base = a->data[i];
+        float local_grad = 0.0f;
+        if (base == 0.0f) {
+          if (exponent > 1.0f) {
+            local_grad = 0.0f;
+          } else if (exponent == 1.0f) {
+            local_grad = 1.0f;
+          } else {
+            continue;
+          }
+        } else {
+          local_grad = exponent * powf(base, exponent - 1.0f);
+        }
+        a->grad[i] += result->grad[i] * local_grad;
+      }
+    };
+  }
   return result;
 }
 
@@ -582,14 +973,37 @@ Tensor *tensor_exp(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    result->data[i] = expf(a->data[i]);
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_exp((const float *)a->d_data, (float *)result->d_data,
+                    a->capacity);
+    };
+    result->_backward = [=]() {
+      cu_tensor_exp_backward((float *)a->d_grad,
+                             (const float *)result->d_data,
+                             (const float *)result->d_grad, a->capacity);
+    };
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        result->data[i] = expf(a->data[i]);
+      }
+    };
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        a->grad[i] += result->grad[i] * result->data[i];
+      }
+    };
   }
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      a->grad[i] += result->grad[i] * result->data[i];
-    }
-  };
   return result;
 }
 
@@ -598,27 +1012,49 @@ Tensor *tensor_log(Tensor *a) {
   if (result == NULL) {
     return NULL;
   }
-  for (int i = 0; i < a->capacity; i++) {
-    float val = a->data[i];
-    if (val <= 0.0f) {
-      fprintf(stderr,
-              "Warning (tensor_log): log undefined for non-positive values, "
-              "got %f\n",
-              val);
-      result->data[i] = -INFINITY;
-    } else {
-      result->data[i] = logf(val);
-    }
-  }
-  result->_backward = [=]() {
-    for (int i = 0; i < a->capacity; i++) {
-      float val = a->data[i];
-      if (val <= 0.0f) {
-        continue;
+
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_log((const float *)a->d_data, (float *)result->d_data,
+                    a->capacity);
+    };
+    result->_backward = [=]() {
+      cu_tensor_log_backward((float *)a->d_grad, (const float *)a->d_data,
+                             (const float *)result->d_grad, a->capacity);
+    };
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      for (int i = 0; i < a->capacity; i++) {
+        float val = a->data[i];
+        if (val <= 0.0f) {
+          fprintf(stderr,
+                  "Warning (tensor_log): log undefined for non-positive "
+                  "values, got %f\n",
+                  val);
+          result->data[i] = -INFINITY;
+        } else {
+          result->data[i] = logf(val);
+        }
       }
-      a->grad[i] += result->grad[i] / val;
-    }
-  };
+    };
+    result->_backward = [=]() {
+      for (int i = 0; i < a->capacity; i++) {
+        float val = a->data[i];
+        if (val <= 0.0f) {
+          continue;
+        }
+        a->grad[i] += result->grad[i] / val;
+      }
+    };
+  }
   return result;
 }
 
@@ -633,26 +1069,48 @@ Tensor *tensor_aggregate(Tensor *a) {
     return NULL;
   }
 
-  float sum = 0.0f;
-  for (int i = 0; i < a->capacity; i++) {
-    sum += a->data[i];
-  }
-
   int result_shape[] = {1};
-  Tensor *result = tensor_create(1, result_shape);
+  Tensor *result = tensor_create(1, result_shape, a->device);
   if (result == NULL) {
     return NULL;
   }
-  result->data[0] = sum;
 
   result->_parents[0] = (Tensor *)a;
   result->_parents[1] = NULL;
 
-  result->_backward = [=]() {
-    float grad_val = result->grad[0];
-    for (int i = 0; i < a->capacity; i++) {
-      a->grad[i] += grad_val;
-    }
-  };
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      realize(a);
+      cu_tensor_aggregate((const float *)a->d_data, (float *)result->d_data,
+                          a->capacity);
+    };
+    result->_backward = [=]() {
+      float grad_val;
+      cudaMemcpy(&grad_val, result->d_grad, sizeof(float),
+                 cudaMemcpyDeviceToHost);
+      cu_tensor_aggregate_backward((float *)a->d_grad, grad_val, a->capacity);
+    };
+#else
+    fprintf(stderr, "Error: Device is GPU but Not compiled using CUDA Flag\n");
+    tensor_free(result);
+    return NULL;
+#endif
+  } else {
+    result->_forward = [=]() {
+      realize(a);
+      float sum = 0.0f;
+      for (int i = 0; i < a->capacity; i++) {
+        sum += a->data[i];
+      }
+      result->data[0] = sum;
+    };
+    result->_backward = [=]() {
+      float grad_val = result->grad[0];
+      for (int i = 0; i < a->capacity; i++) {
+        a->grad[i] += grad_val;
+      }
+    };
+  }
   return result;
 }
