@@ -4,8 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <string>
-#include <vector>
 
 Tensor *tensor_create(int ndim, int *shape, Device device) {
   if (ndim <= 0 || shape == NULL) {
@@ -78,6 +76,8 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
   t->_parents[0] = NULL;
   t->_parents[1] = NULL;
   t->_backward = NULL;
+  t->_forward = NULL;
+  t->_realized = false;
 
   t->grad = (float *)malloc(capacity * sizeof(float));
   if (t->grad == NULL) {
@@ -195,6 +195,21 @@ Tensor *tensor_from_data(int ndim, int *shape, float *data, Device device) {
   }
 
   return t;
+}
+
+void realize(Tensor *t) {
+  if (t == NULL) {
+    ERROR_MSG("Error: Realizing a NULL Tensor\n");
+    return;
+  }
+
+  if (t->_realized == true) {
+    return;
+  }
+  if (t->_forward != NULL) {
+    t->_forward();
+  }
+  t->_realized = true;
 }
 
 void tensor_free(Tensor *t) {

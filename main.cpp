@@ -4,14 +4,11 @@
 
 int main() {
   Tensor *x = tensor_ones(2, new int[2]{1000, 1}, DEVICE_GPU);
-  Tensor *y = tensor_random(2, new int[2]{1000, 1}, DEVICE_GPU);
-
-  Tensor *z = tensor_ones(2, new int[2]{1000, 1}, DEVICE_GPU);
-
+  Tensor *y = tensor_ones(2, new int[2]{1000, 1}, DEVICE_GPU);
   Tensor *r = tensor_add(x, y);
-  Tensor *s = tensor_sub(r, z);
+  Tensor *s = tensor_add(r, x);
 
-  backward(s);
+  realize(s);
 
   std::cout << *s << std::endl;
 

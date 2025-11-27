@@ -1,4 +1,5 @@
 #include "utils.hpp"
+#include "tensor.hpp"
 #include <string>
 
 // Helper function to get CPU data pointer (handles GPU->CPU copy if needed)
@@ -22,7 +23,7 @@ static float *get_cpu_data(const Tensor &t, float **temp_buffer) {
 
 // Helper function to recursively print tensor data
 static void print_tensor_data(std::ostream &os, const float *data,
-                               const Tensor &t, int dim, int offset) {
+                              const Tensor &t, int dim, int offset) {
   if (dim >= t.ndim)
     return;
 
@@ -84,4 +85,3 @@ std::ostream &operator<<(std::ostream &os, const Tensor &t) {
 
   return os;
 }
-

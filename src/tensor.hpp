@@ -33,6 +33,8 @@ typedef struct Tensor {
 
   Tensor **_parents;
   std::function<void()> _backward;
+  std::function<void()> _forward;
+  bool _realized;
 
 #ifdef USE_CUDA
   float *d_data;
@@ -50,5 +52,7 @@ Tensor *tensor_zeroes(int ndim, int *shape, Device = DEVICE_CPU);
 Tensor *tensor_random(int ndim, int *shape, Device = DEVICE_CPU);
 Tensor *tensor_from_data(int ndim, int *shape, float *data,
                          Device = DEVICE_CPU);
+
+void realize(Tensor *t);
 
 #endif
