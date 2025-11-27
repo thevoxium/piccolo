@@ -43,12 +43,12 @@ Tensor *tensor_add(Tensor *a, Tensor *b) {
 
   result->_parents[0] = (Tensor *)a;
   result->_parents[1] = (Tensor *)b;
-  realize(a);
-  realize(b);
 
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
+      realize(a);
+      realize(b);
       cu_tensor_add((const float *)a->d_data, (const float *)b->d_data,
                     (float *)result->d_data, a->capacity);
     };
@@ -62,6 +62,8 @@ Tensor *tensor_add(Tensor *a, Tensor *b) {
 #endif
   } else {
     result->_forward = [=]() {
+      realize(a);
+      realize(b);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = a->data[i] + b->data[i];
       }
@@ -84,12 +86,12 @@ Tensor *tensor_sub(Tensor *a, Tensor *b) {
 
   result->_parents[0] = (Tensor *)a;
   result->_parents[1] = (Tensor *)b;
-  realize(a);
-  realize(b);
 
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
+      realize(a);
+      realize(b);
       cu_tensor_sub((const float *)a->d_data, (const float *)b->d_data,
                     (float *)result->d_data, a->capacity);
     };
@@ -103,6 +105,8 @@ Tensor *tensor_sub(Tensor *a, Tensor *b) {
 #endif
   } else {
     result->_forward = [=]() {
+      realize(a);
+      realize(b);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = a->data[i] - b->data[i];
       }
@@ -233,12 +237,11 @@ Tensor *tensor_mm(Tensor *a, Tensor *b) {
   result->_parents[0] = (Tensor *)a;
   result->_parents[1] = (Tensor *)b;
 
-  realize(a);
-  realize(b);
-
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
+      realize(a);
+      realize(b);
       cu_tensor_mm((const float *)a->d_data, (const float *)b->d_data,
                    (float *)result->d_data, m, k, n);
     };
@@ -253,6 +256,8 @@ Tensor *tensor_mm(Tensor *a, Tensor *b) {
 #endif
   } else {
     result->_forward = [=]() {
+      realize(a);
+      realize(b);
       cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1.0f,
                   a->data, k, b->data, n, 0.0f, result->data, n);
     };
