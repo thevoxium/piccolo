@@ -32,7 +32,8 @@ void backward(Tensor *root) {
   std::vector<Tensor *> topo;
   build_topological_order(root, topo);
 
-  realize(root);
+  // Note: realize(root) removed - caller must ensure graph is realized before
+  // calling backward(). This avoids redundant graph traversal.
 
   // Initialize root gradient to 1.0f for each element
 #ifdef USE_CUDA
@@ -46,6 +47,7 @@ void backward(Tensor *root) {
                  cudaMemcpyHostToDevice);
       delete[] ones;
       root->_host_dirty = true;
+      root->_device_dirty = false;
     }
   } else
 #endif
@@ -65,6 +67,7 @@ void backward(Tensor *root) {
           Tensor *parent = t->_parents[i];
           if (parent != NULL && parent->device == DEVICE_GPU) {
             parent->_host_dirty = true;
+            parent->_device_dirty = false;  // device just got updated
           }
         }
       }
