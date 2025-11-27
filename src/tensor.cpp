@@ -96,6 +96,8 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
 #ifdef USE_CUDA
     CUDA_CHECK(cudaMalloc(&t->d_data, capacity * sizeof(float)));
     CUDA_CHECK(cudaMalloc(&t->d_grad, capacity * sizeof(float)));
+    CUDA_CHECK(cudaMemset(t->d_data, 0, capacity * sizeof(float)));
+    CUDA_CHECK(cudaMemset(t->d_grad, 0, capacity * sizeof(float)));
 #else
     ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
     t->device = DEVICE_CPU;
