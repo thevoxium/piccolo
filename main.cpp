@@ -37,7 +37,7 @@ int main() {
 
     // Update parameters on GPU
     // Copy gradients to host, update, copy back
-    float w_grad, b_grad_val;
+    float w_grad;
     cudaMemcpy(&w_grad, w->d_grad, sizeof(float), cudaMemcpyDeviceToHost);
 
     float w_val;
