@@ -48,7 +48,7 @@ Tensor *tensor_add(Tensor *a, Tensor *b) {
 
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
-    resuls->_forward = [=]() {
+    result->_forward = [=]() {
       cu_tensor_add((const float *)a->d_data, (const float *)b->d_data,
                     (float *)result->d_data, a->capacity);
     };
