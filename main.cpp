@@ -25,6 +25,10 @@ int main() {
   float learning_rate = 0.01f;
 
   for (int i = 0; i < epochs; i++) {
+    // Zero gradients BEFORE backward pass to prevent accumulation
+    CUDA_CHECK(cudaMemset(w->d_grad, 0, w->capacity * sizeof(float)));
+    CUDA_CHECK(cudaMemset(b->d_grad, 0, b->capacity * sizeof(float)));
+    
     Tensor *z = tensor_mm(x, w);
     Tensor *pred = tensor_add(z, b);
     Tensor *loss = loss_mse(pred, y);
@@ -33,32 +37,34 @@ int main() {
 
     // Copy loss to host for printing
     float loss_val;
-    cudaMemcpy(&loss_val, loss->d_data, sizeof(float), cudaMemcpyDeviceToHost);
+    CUDA_CHECK(cudaMemcpy(&loss_val, loss->d_data, sizeof(float),
+                          cudaMemcpyDeviceToHost));
 
     // Update parameters on GPU
     // Copy gradients to host, update, copy back
     float w_grad;
-    cudaMemcpy(&w_grad, w->d_grad, sizeof(float), cudaMemcpyDeviceToHost);
+    CUDA_CHECK(cudaMemcpy(&w_grad, w->d_grad, sizeof(float),
+                          cudaMemcpyDeviceToHost));
 
     float w_val;
-    cudaMemcpy(&w_val, w->d_data, sizeof(float), cudaMemcpyDeviceToHost);
+    CUDA_CHECK(cudaMemcpy(&w_val, w->d_data, sizeof(float),
+                          cudaMemcpyDeviceToHost));
     w_val -= learning_rate * w_grad;
-    cudaMemcpy(w->d_data, &w_val, sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemset(w->d_grad, 0, sizeof(float));
+    CUDA_CHECK(cudaMemcpy(w->d_data, &w_val, sizeof(float),
+                          cudaMemcpyHostToDevice));
 
     // Update bias (element-wise on GPU would be better, but for simplicity...)
     float *b_grad_host = new float[b->capacity];
     float *b_data_host = new float[b->capacity];
-    cudaMemcpy(b_grad_host, b->d_grad, b->capacity * sizeof(float),
-               cudaMemcpyDeviceToHost);
-    cudaMemcpy(b_data_host, b->d_data, b->capacity * sizeof(float),
-               cudaMemcpyDeviceToHost);
+    CUDA_CHECK(cudaMemcpy(b_grad_host, b->d_grad, b->capacity * sizeof(float),
+                          cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(b_data_host, b->d_data, b->capacity * sizeof(float),
+                          cudaMemcpyDeviceToHost));
     for (int j = 0; j < b->capacity; j++) {
       b_data_host[j] -= learning_rate * b_grad_host[j];
     }
-    cudaMemcpy(b->d_data, b_data_host, b->capacity * sizeof(float),
-               cudaMemcpyHostToDevice);
-    cudaMemset(b->d_grad, 0, b->capacity * sizeof(float));
+    CUDA_CHECK(cudaMemcpy(b->d_data, b_data_host, b->capacity * sizeof(float),
+                          cudaMemcpyHostToDevice));
     delete[] b_grad_host;
     delete[] b_data_host;
 
