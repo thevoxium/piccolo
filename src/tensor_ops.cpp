@@ -47,8 +47,6 @@ Tensor *tensor_add(Tensor *a, Tensor *b) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
-      realize(b);
       cu_tensor_add((const float *)a->d_data, (const float *)b->d_data,
                     (float *)result->d_data, a->capacity);
     };
@@ -62,8 +60,6 @@ Tensor *tensor_add(Tensor *a, Tensor *b) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
-      realize(b);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = a->data[i] + b->data[i];
       }
@@ -90,8 +86,6 @@ Tensor *tensor_sub(Tensor *a, Tensor *b) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
-      realize(b);
       cu_tensor_sub((const float *)a->d_data, (const float *)b->d_data,
                     (float *)result->d_data, a->capacity);
     };
@@ -105,8 +99,6 @@ Tensor *tensor_sub(Tensor *a, Tensor *b) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
-      realize(b);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = a->data[i] - b->data[i];
       }
@@ -142,7 +134,6 @@ Tensor *tensor_scale(Tensor *a, float k) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_scale((const float *)a->d_data, (float *)result->d_data, k,
                       a->capacity);
     };
@@ -156,7 +147,6 @@ Tensor *tensor_scale(Tensor *a, float k) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = k * a->data[i];
       }
@@ -210,8 +200,6 @@ Tensor *tensor_dot(Tensor *a, Tensor *b) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
-      realize(b);
       cu_tensor_dot((const float *)a->d_data, (const float *)b->d_data,
                     (float *)result->d_data, a->capacity);
     };
@@ -229,8 +217,6 @@ Tensor *tensor_dot(Tensor *a, Tensor *b) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
-      realize(b);
       float dot_result = 0.0f;
       for (int i = 0; i < a->capacity; i++) {
         dot_result += a->data[i] * b->data[i];
@@ -290,8 +276,6 @@ Tensor *tensor_mm(Tensor *a, Tensor *b) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
-      realize(b);
       cu_tensor_mm((const float *)a->d_data, (const float *)b->d_data,
                    (float *)result->d_data, m, k, n);
     };
@@ -306,8 +290,6 @@ Tensor *tensor_mm(Tensor *a, Tensor *b) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
-      realize(b);
       cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1.0f,
                   a->data, k, b->data, n, 0.0f, result->data, n);
     };
@@ -336,7 +318,6 @@ Tensor *tensor_neg(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_neg((const float *)a->d_data, (float *)result->d_data,
                     a->capacity);
     };
@@ -351,7 +332,6 @@ Tensor *tensor_neg(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = -a->data[i];
       }
@@ -374,7 +354,6 @@ Tensor *tensor_log2(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_log2((const float *)a->d_data, (float *)result->d_data,
                      a->capacity);
     };
@@ -389,7 +368,6 @@ Tensor *tensor_log2(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         float val = a->data[i];
         if (val <= 0.0f) {
@@ -426,7 +404,6 @@ Tensor *tensor_exp2(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_exp2((const float *)a->d_data, (float *)result->d_data,
                      a->capacity);
     };
@@ -442,7 +419,6 @@ Tensor *tensor_exp2(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = exp2f(a->data[i]);
       }
@@ -466,7 +442,6 @@ Tensor *tensor_sqrt(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_sqrt((const float *)a->d_data, (float *)result->d_data,
                      a->capacity);
     };
@@ -482,7 +457,6 @@ Tensor *tensor_sqrt(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         float val = a->data[i];
         if (val < 0.0f) {
@@ -519,7 +493,6 @@ Tensor *tensor_sin(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_sin((const float *)a->d_data, (float *)result->d_data,
                     a->capacity);
     };
@@ -534,7 +507,6 @@ Tensor *tensor_sin(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = sinf(a->data[i]);
       }
@@ -557,7 +529,6 @@ Tensor *tensor_cos(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_cos((const float *)a->d_data, (float *)result->d_data,
                     a->capacity);
     };
@@ -572,7 +543,6 @@ Tensor *tensor_cos(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = cosf(a->data[i]);
       }
@@ -595,7 +565,6 @@ Tensor *tensor_tan(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_tan((const float *)a->d_data, (float *)result->d_data,
                     a->capacity);
     };
@@ -611,7 +580,6 @@ Tensor *tensor_tan(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = tanf(a->data[i]);
       }
@@ -635,7 +603,6 @@ Tensor *tensor_trunc(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_trunc((const float *)a->d_data, (float *)result->d_data,
                       a->capacity);
     };
@@ -647,7 +614,6 @@ Tensor *tensor_trunc(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = truncf(a->data[i]);
       }
@@ -666,7 +632,6 @@ Tensor *tensor_ceil(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_ceil((const float *)a->d_data, (float *)result->d_data,
                      a->capacity);
     };
@@ -678,7 +643,6 @@ Tensor *tensor_ceil(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = ceilf(a->data[i]);
       }
@@ -697,7 +661,6 @@ Tensor *tensor_floor(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_floor((const float *)a->d_data, (float *)result->d_data,
                       a->capacity);
     };
@@ -709,7 +672,6 @@ Tensor *tensor_floor(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = floorf(a->data[i]);
       }
@@ -728,7 +690,6 @@ Tensor *tensor_round(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_round((const float *)a->d_data, (float *)result->d_data,
                       a->capacity);
     };
@@ -740,7 +701,6 @@ Tensor *tensor_round(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = roundf(a->data[i]);
       }
@@ -759,7 +719,6 @@ Tensor *tensor_square(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_square((const float *)a->d_data, (float *)result->d_data,
                        a->capacity);
     };
@@ -774,7 +733,6 @@ Tensor *tensor_square(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         float val = a->data[i];
         result->data[i] = val * val;
@@ -798,7 +756,6 @@ Tensor *tensor_sign(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_sign((const float *)a->d_data, (float *)result->d_data,
                      a->capacity);
     };
@@ -810,7 +767,6 @@ Tensor *tensor_sign(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         float val = a->data[i];
         result->data[i] = (val > 0.0f) ? 1.0f : ((val < 0.0f) ? -1.0f : 0.0f);
@@ -830,7 +786,6 @@ Tensor *tensor_abs(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_abs((const float *)a->d_data, (float *)result->d_data,
                     a->capacity);
     };
@@ -845,7 +800,6 @@ Tensor *tensor_abs(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = fabsf(a->data[i]);
       }
@@ -875,7 +829,6 @@ Tensor *tensor_reciprocal(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_reciprocal((const float *)a->d_data, (float *)result->d_data,
                            a->capacity);
     };
@@ -891,7 +844,6 @@ Tensor *tensor_reciprocal(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         float val = a->data[i];
         if (val == 0.0f) {
@@ -925,7 +877,6 @@ Tensor *tensor_pow(Tensor *a, float exponent) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_pow((const float *)a->d_data, (float *)result->d_data, exponent,
                     a->capacity);
     };
@@ -941,7 +892,6 @@ Tensor *tensor_pow(Tensor *a, float exponent) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = powf(a->data[i], exponent);
       }
@@ -977,7 +927,6 @@ Tensor *tensor_exp(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_exp((const float *)a->d_data, (float *)result->d_data,
                     a->capacity);
     };
@@ -993,7 +942,6 @@ Tensor *tensor_exp(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         result->data[i] = expf(a->data[i]);
       }
@@ -1016,7 +964,6 @@ Tensor *tensor_log(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_log((const float *)a->d_data, (float *)result->d_data,
                     a->capacity);
     };
@@ -1031,7 +978,6 @@ Tensor *tensor_log(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       for (int i = 0; i < a->capacity; i++) {
         float val = a->data[i];
         if (val <= 0.0f) {
@@ -1081,7 +1027,6 @@ Tensor *tensor_aggregate(Tensor *a) {
   if (a->device == DEVICE_GPU) {
 #ifdef USE_CUDA
     result->_forward = [=]() {
-      realize(a);
       cu_tensor_aggregate((const float *)a->d_data, (float *)result->d_data,
                           a->capacity);
     };
@@ -1098,7 +1043,6 @@ Tensor *tensor_aggregate(Tensor *a) {
 #endif
   } else {
     result->_forward = [=]() {
-      realize(a);
       float sum = 0.0f;
       for (int i = 0; i < a->capacity; i++) {
         sum += a->data[i];

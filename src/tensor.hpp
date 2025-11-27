@@ -53,6 +53,24 @@ Tensor *tensor_random(int ndim, int *shape, Device = DEVICE_CPU);
 Tensor *tensor_from_data(int ndim, int *shape, float *data,
                          Device = DEVICE_CPU);
 
+// Realize the tensor and all its dependencies in the computation graph
 void realize(Tensor *t);
+
+// Set device for the entire computation graph rooted at t
+void set_graph_device(Tensor *root, Device device);
+
+// Sync data/grad between host (CPU) and device (GPU) for a single tensor
+void sync_to_host(Tensor *t);
+void sync_to_device(Tensor *t);
+
+// Sync data/grad between host and device for entire computation graph
+void sync_graph_to_host(Tensor *root);
+void sync_graph_to_device(Tensor *root);
+
+// Zero gradients for a single tensor
+void zero_grad(Tensor *t);
+
+// Zero gradients for entire computation graph
+void zero_graph_grad(Tensor *root);
 
 #endif

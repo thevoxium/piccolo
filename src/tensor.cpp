@@ -1,9 +1,12 @@
 #include "tensor.hpp"
+#include <algorithm>
 #include <climits>
 #include <functional>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unordered_set>
+#include <vector>
 
 Tensor *tensor_create(int ndim, int *shape, Device device) {
   if (ndim <= 0 || shape == NULL) {
@@ -199,19 +202,48 @@ Tensor *tensor_from_data(int ndim, int *shape, float *data, Device device) {
   return t;
 }
 
+// Helper function to build topological order for graph traversal
+static void build_topo_order(Tensor *root, std::vector<Tensor *> &topo,
+                             std::unordered_set<Tensor *> &visited) {
+  if (root == NULL || visited.find(root) != visited.end()) {
+    return;
+  }
+  visited.insert(root);
+
+  // Visit parents first (dependencies)
+  if (root->_parents != NULL) {
+    for (int i = 0; i < 2; i++) {
+      if (root->_parents[i] != NULL) {
+        build_topo_order(root->_parents[i], topo, visited);
+      }
+    }
+  }
+
+  // Add this node after its dependencies
+  topo.push_back(root);
+}
+
 void realize(Tensor *t) {
   if (t == NULL) {
     ERROR_MSG("Error: Realizing a NULL Tensor\n");
     return;
   }
 
-  if (t->_realized == true) {
-    return;
+  // Build topological order: leaves first, root last
+  std::vector<Tensor *> topo;
+  std::unordered_set<Tensor *> visited;
+  build_topo_order(t, topo, visited);
+
+  // Realize tensors in topological order (leaves first)
+  for (Tensor *tensor : topo) {
+    if (tensor->_realized) {
+      continue;
+    }
+    if (tensor->_forward != NULL) {
+      tensor->_forward();
+    }
+    tensor->_realized = true;
   }
-  if (t->_forward != NULL) {
-    t->_forward();
-  }
-  t->_realized = true;
 }
 
 void tensor_free(Tensor *t) {
@@ -244,4 +276,186 @@ void tensor_free(Tensor *t) {
   }
 
   delete t;
+}
+
+void sync_to_host(Tensor *t) {
+  if (t == NULL) {
+    ERROR_MSG("Error: sync_to_host called with NULL tensor\n");
+    return;
+  }
+
+  if (t->device != DEVICE_GPU) {
+    // Nothing to sync - tensor is already on CPU
+    return;
+  }
+
+#ifdef USE_CUDA
+  if (t->d_data != NULL && t->data != NULL) {
+    CUDA_CHECK(cudaMemcpy(t->data, t->d_data, t->capacity * sizeof(float),
+                          cudaMemcpyDeviceToHost));
+  }
+  if (t->d_grad != NULL && t->grad != NULL) {
+    CUDA_CHECK(cudaMemcpy(t->grad, t->d_grad, t->capacity * sizeof(float),
+                          cudaMemcpyDeviceToHost));
+  }
+#else
+  ERROR_MSG("Error: sync_to_host called but not built with CUDA\n");
+#endif
+}
+
+void sync_to_device(Tensor *t) {
+  if (t == NULL) {
+    ERROR_MSG("Error: sync_to_device called with NULL tensor\n");
+    return;
+  }
+
+  if (t->device != DEVICE_GPU) {
+    // Nothing to sync - tensor is on CPU only
+    return;
+  }
+
+#ifdef USE_CUDA
+  if (t->data != NULL && t->d_data != NULL) {
+    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float),
+                          cudaMemcpyHostToDevice));
+  }
+  if (t->grad != NULL && t->d_grad != NULL) {
+    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
+                          cudaMemcpyHostToDevice));
+  }
+#else
+  ERROR_MSG("Error: sync_to_device called but not built with CUDA\n");
+#endif
+}
+
+void sync_graph_to_host(Tensor *root) {
+  if (root == NULL) {
+    return;
+  }
+
+  std::vector<Tensor *> topo;
+  std::unordered_set<Tensor *> visited;
+  build_topo_order(root, topo, visited);
+
+  for (Tensor *t : topo) {
+    sync_to_host(t);
+  }
+}
+
+void sync_graph_to_device(Tensor *root) {
+  if (root == NULL) {
+    return;
+  }
+
+  std::vector<Tensor *> topo;
+  std::unordered_set<Tensor *> visited;
+  build_topo_order(root, topo, visited);
+
+  for (Tensor *t : topo) {
+    sync_to_device(t);
+  }
+}
+
+void zero_grad(Tensor *t) {
+  if (t == NULL) {
+    return;
+  }
+
+  if (t->grad != NULL) {
+    memset(t->grad, 0, t->capacity * sizeof(float));
+  }
+
+  if (t->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    if (t->d_grad != NULL) {
+      CUDA_CHECK(cudaMemset(t->d_grad, 0, t->capacity * sizeof(float)));
+    }
+#endif
+  }
+}
+
+void zero_graph_grad(Tensor *root) {
+  if (root == NULL) {
+    return;
+  }
+
+  std::vector<Tensor *> topo;
+  std::unordered_set<Tensor *> visited;
+  build_topo_order(root, topo, visited);
+
+  for (Tensor *t : topo) {
+    zero_grad(t);
+  }
+}
+
+// Helper to set device for a single tensor (allocates/frees GPU memory as needed)
+static void set_tensor_device(Tensor *t, Device device) {
+  if (t == NULL || t->device == device) {
+    return;
+  }
+
+  Device old_device = t->device;
+  t->device = device;
+
+  if (device == DEVICE_GPU && old_device == DEVICE_CPU) {
+    // Moving from CPU to GPU - allocate GPU memory and copy data
+#ifdef USE_CUDA
+    CUDA_CHECK(cudaMalloc(&t->d_data, t->capacity * sizeof(float)));
+    CUDA_CHECK(cudaMalloc(&t->d_grad, t->capacity * sizeof(float)));
+
+    if (t->data != NULL) {
+      CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float),
+                            cudaMemcpyHostToDevice));
+    } else {
+      CUDA_CHECK(cudaMemset(t->d_data, 0, t->capacity * sizeof(float)));
+    }
+
+    if (t->grad != NULL) {
+      CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
+                            cudaMemcpyHostToDevice));
+    } else {
+      CUDA_CHECK(cudaMemset(t->d_grad, 0, t->capacity * sizeof(float)));
+    }
+#else
+    ERROR_MSG("Error: Cannot set device to GPU - not built with CUDA\n");
+    t->device = DEVICE_CPU;
+#endif
+  } else if (device == DEVICE_CPU && old_device == DEVICE_GPU) {
+    // Moving from GPU to CPU - copy data back and free GPU memory
+#ifdef USE_CUDA
+    if (t->d_data != NULL) {
+      if (t->data != NULL) {
+        CUDA_CHECK(cudaMemcpy(t->data, t->d_data, t->capacity * sizeof(float),
+                              cudaMemcpyDeviceToHost));
+      }
+      CUDA_CHECK(cudaFree(t->d_data));
+      t->d_data = NULL;
+    }
+
+    if (t->d_grad != NULL) {
+      if (t->grad != NULL) {
+        CUDA_CHECK(cudaMemcpy(t->grad, t->d_grad, t->capacity * sizeof(float),
+                              cudaMemcpyDeviceToHost));
+      }
+      CUDA_CHECK(cudaFree(t->d_grad));
+      t->d_grad = NULL;
+    }
+#else
+    ERROR_MSG("Error: Cannot move from GPU - not built with CUDA\n");
+#endif
+  }
+}
+
+void set_graph_device(Tensor *root, Device device) {
+  if (root == NULL) {
+    return;
+  }
+
+  std::vector<Tensor *> topo;
+  std::unordered_set<Tensor *> visited;
+  build_topo_order(root, topo, visited);
+
+  for (Tensor *t : topo) {
+    set_tensor_device(t, device);
+  }
 }

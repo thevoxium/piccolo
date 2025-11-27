@@ -11,62 +11,53 @@ int main() {
   int w_shape[2] = {1, 1};
   int b_shape[2] = {1000, 1};
 
-  Tensor *x = tensor_random(2, x_shape, DEVICE_GPU);
-  realize(x);
+  // Create tensors on CPU first
+  Tensor *x = tensor_random(2, x_shape, DEVICE_CPU);
   Tensor *y = tensor_sin(x);
-  realize(y);
+  realize(y);  // Realize the computation graph (x -> y)
 
-  Tensor *w = tensor_random(2, w_shape, DEVICE_GPU);
-  realize(w);
-  Tensor *b = tensor_random(2, b_shape, DEVICE_GPU);
-  realize(b);
+  Tensor *w = tensor_random(2, w_shape, DEVICE_CPU);
+  Tensor *b = tensor_random(2, b_shape, DEVICE_CPU);
+
+  // Move all tensors to GPU
+  set_graph_device(y, DEVICE_GPU);
+  set_graph_device(w, DEVICE_GPU);
+  set_graph_device(b, DEVICE_GPU);
 
   int epochs = 1000;
   float learning_rate = 0.001f;
 
   for (int i = 0; i < epochs; i++) {
-    // Zero gradients BEFORE backward pass to prevent accumulation
-    CUDA_CHECK(cudaMemset(w->d_grad, 0, w->capacity * sizeof(float)));
-    CUDA_CHECK(cudaMemset(b->d_grad, 0, b->capacity * sizeof(float)));
-    
+    // Zero gradients for parameters before backward pass
+    zero_grad(w);
+    zero_grad(b);
+
+    // Build computation graph and realize at the end
     Tensor *z = tensor_mm(x, w);
     Tensor *pred = tensor_add(z, b);
     Tensor *loss = loss_mse(pred, y);
-    realize(loss);
+    realize(loss);  // This realizes the entire computation graph
     backward(loss);
 
-    // Copy loss to host for printing
-    float loss_val;
-    CUDA_CHECK(cudaMemcpy(&loss_val, loss->d_data, sizeof(float),
-                          cudaMemcpyDeviceToHost));
+    // Sync loss to host for printing
+    sync_to_host(loss);
+    float loss_val = loss->data[0];
 
-    // Update parameters on GPU
-    // Copy gradients to host, update, copy back
-    float w_grad;
-    CUDA_CHECK(cudaMemcpy(&w_grad, w->d_grad, sizeof(float),
-                          cudaMemcpyDeviceToHost));
+    // Sync parameter gradients to host for update
+    sync_to_host(w);
+    sync_to_host(b);
 
-    float w_val;
-    CUDA_CHECK(cudaMemcpy(&w_val, w->d_data, sizeof(float),
-                          cudaMemcpyDeviceToHost));
-    w_val -= learning_rate * w_grad;
-    CUDA_CHECK(cudaMemcpy(w->d_data, &w_val, sizeof(float),
-                          cudaMemcpyHostToDevice));
-
-    // Update bias (element-wise on GPU would be better, but for simplicity...)
-    float *b_grad_host = new float[b->capacity];
-    float *b_data_host = new float[b->capacity];
-    CUDA_CHECK(cudaMemcpy(b_grad_host, b->d_grad, b->capacity * sizeof(float),
-                          cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(b_data_host, b->d_data, b->capacity * sizeof(float),
-                          cudaMemcpyDeviceToHost));
-    for (int j = 0; j < b->capacity; j++) {
-      b_data_host[j] -= learning_rate * b_grad_host[j];
+    // Update parameters on host
+    for (int j = 0; j < w->capacity; j++) {
+      w->data[j] -= learning_rate * w->grad[j];
     }
-    CUDA_CHECK(cudaMemcpy(b->d_data, b_data_host, b->capacity * sizeof(float),
-                          cudaMemcpyHostToDevice));
-    delete[] b_grad_host;
-    delete[] b_data_host;
+    for (int j = 0; j < b->capacity; j++) {
+      b->data[j] -= learning_rate * b->grad[j];
+    }
+
+    // Sync updated parameters back to device
+    sync_to_device(w);
+    sync_to_device(b);
 
     if (i % 10 == 0 || i == epochs - 1) {
       std::cout << "Epoch " << i << " Loss: " << loss_val << std::endl;
@@ -92,33 +83,33 @@ int main() {
   int b_shape[2] = {1000, 1};
 
   Tensor *x = tensor_random(2, x_shape, DEVICE_CPU);
-  realize(x);
   Tensor *y = tensor_sin(x);
-  realize(y);
+  realize(y);  // Realize the computation graph (x -> y)
 
   Tensor *w = tensor_random(2, w_shape, DEVICE_CPU);
-  realize(w);
   Tensor *b = tensor_random(2, b_shape, DEVICE_CPU);
-  realize(b);
 
   int epochs = 1000;
   float learning_rate = 0.001f;
 
   for (int i = 0; i < epochs; i++) {
+    // Zero gradients for parameters before backward pass
+    zero_grad(w);
+    zero_grad(b);
+
+    // Build computation graph and realize at the end
     Tensor *z = tensor_mm(x, w);
     Tensor *pred = tensor_add(z, b);
     Tensor *loss = loss_mse(pred, y);
-    realize(loss);
+    realize(loss);  // This realizes the entire computation graph
     backward(loss);
 
     // Update parameters in-place
     for (int j = 0; j < w->capacity; j++) {
       w->data[j] -= learning_rate * w->grad[j];
-      w->grad[j] = 0.0f;
     }
     for (int j = 0; j < b->capacity; j++) {
       b->data[j] -= learning_rate * b->grad[j];
-      b->grad[j] = 0.0f;
     }
 
     if (i % 10 == 0 || i == epochs - 1) {
