@@ -214,10 +214,8 @@ Tensor *tensor_mm(Tensor *a, Tensor *b) {
     fprintf(stderr, "Error (tensor_mm): Tensor data or grad arrays are NULL\n");
     return NULL;
   }
-  // cblas_sgemm requires CPU tensors
-  if (a->device != DEVICE_CPU || b->device != DEVICE_CPU) {
-    fprintf(stderr, "Error (tensor_mm): Both tensors must be on CPU "
-                    "(cblas_sgemm is CPU-only)\n");
+  if (a->device != b->device) {
+    fprintf(stderr, "Error (tensor_mm): Tensor devices do not match\n");
     return NULL;
   }
 
@@ -226,28 +224,50 @@ Tensor *tensor_mm(Tensor *a, Tensor *b) {
   const int n = b->shape[1];
 
   int result_shape[2] = {m, n};
-  Tensor *result = tensor_create(2, result_shape, DEVICE_CPU);
+  Tensor *result = tensor_create(2, result_shape, a->device);
   if (result == NULL) {
     fprintf(stderr, "Error (tensor_mm): Failed to create result tensor\n");
     return NULL;
   }
 
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1.0f, a->data,
-              k, b->data, n, 0.0f, result->data, n);
+  result->_parents[0] = (Tensor *)a;
+  result->_parents[1] = (Tensor *)b;
 
-  result->_parents[0] = a;
-  result->_parents[1] = b;
+  realize(a);
+  realize(b);
 
-  result->_backward = [=]() {
-    if (a->grad != NULL) {
-      cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, m, k, n, 1.0f,
-                  result->grad, n, b->data, n, 1.0f, a->grad, k);
-    }
-    if (b->grad != NULL) {
-      cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans, k, n, m, 1.0f,
-                  a->data, k, result->grad, n, 1.0f, b->grad, n);
-    }
-  };
+  if (a->device == DEVICE_GPU) {
+#ifdef USE_CUDA
+    result->_forward = [=]() {
+      cu_tensor_mm((const float *)a->d_data, (const float *)b->d_data,
+                   (float *)result->d_data, m, k, n);
+    };
+    result->_backward = [=]() {
+      cu_tensor_mm_backward((float *)a->d_grad, (float *)b->d_grad,
+                            (const float *)a->d_data, (const float *)b->d_data,
+                            (const float *)result->d_grad, m, k, n);
+    };
+#else
+    ERROR_RETURN_NULL(
+        "Error (tensor_mm): Device is GPU but Not compiled using CUDA Flag\n");
+#endif
+  } else {
+    result->_forward = [=]() {
+      cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1.0f,
+                  a->data, k, b->data, n, 0.0f, result->data, n);
+    };
+
+    result->_backward = [=]() {
+      if (a->grad != NULL) {
+        cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, m, k, n, 1.0f,
+                    result->grad, n, b->data, n, 1.0f, a->grad, k);
+      }
+      if (b->grad != NULL) {
+        cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans, k, n, m, 1.0f,
+                    a->data, k, result->grad, n, 1.0f, b->grad, n);
+      }
+    };
+  }
 
   return result;
 }

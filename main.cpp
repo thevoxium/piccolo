@@ -1,18 +1,71 @@
 #include "src/engine.hpp"
 #include "src/tensor.hpp"
 #include "src/tensor_ops.hpp"
+#include <cmath>
 
 int main() {
-  Tensor *x = tensor_ones(2, new int[2]{1000, 1}, DEVICE_GPU);
-  Tensor *y = tensor_ones(2, new int[2]{1000, 1}, DEVICE_GPU);
-  Tensor *r = tensor_add(x, y);
-  Tensor *s = tensor_add(r, x);
+  int shape_a[2] = {2, 3};
+  int shape_b[2] = {3, 2};
 
-  realize(s);
+  float data_a[6] = {1.0f, 2.0f, 3.0f, //
+                     4.0f, 5.0f, 6.0f};
+  float data_b[6] = {7.0f, 8.0f, //
+                     9.0f, 10.0f, //
+                     11.0f, 12.0f};
+  float expected[4] = {58.0f, 64.0f, //
+                       139.0f, 154.0f};
 
-  std::cout << *s << std::endl;
+  Tensor *a_cpu = tensor_from_data(2, shape_a, data_a, DEVICE_CPU);
+  Tensor *b_cpu = tensor_from_data(2, shape_b, data_b, DEVICE_CPU);
+  Tensor *res_cpu = tensor_mm(a_cpu, b_cpu);
+  realize(res_cpu);
 
-  free_graph(s);
+  bool cpu_ok = true;
+  for (int i = 0; i < res_cpu->capacity; i++) {
+    if (std::fabs(res_cpu->data[i] - expected[i]) > 1e-4f) {
+      cpu_ok = false;
+      break;
+    }
+  }
+
+  std::cout << "CPU tensor_mm result:\n" << *res_cpu << std::endl;
+  std::cout << "CPU check: " << (cpu_ok ? "PASSED" : "FAILED") << std::endl;
+
+#ifdef USE_CUDA
+  Tensor *a_gpu = tensor_from_data(2, shape_a, data_a, DEVICE_GPU);
+  Tensor *b_gpu = tensor_from_data(2, shape_b, data_b, DEVICE_GPU);
+  Tensor *res_gpu = tensor_mm(a_gpu, b_gpu);
+  realize(res_gpu);
+
+  CUDA_CHECK(cudaMemcpy(res_gpu->data, res_gpu->d_data,
+                        res_gpu->capacity * sizeof(float),
+                        cudaMemcpyDeviceToHost));
+
+  bool gpu_ok = true;
+  for (int i = 0; i < res_gpu->capacity; i++) {
+    if (std::fabs(res_gpu->data[i] - expected[i]) > 1e-4f) {
+      gpu_ok = false;
+      break;
+    }
+  }
+
+  std::cout << "GPU tensor_mm result:\n" << *res_gpu << std::endl;
+  std::cout << "GPU check: " << (gpu_ok ? "PASSED" : "FAILED") << std::endl;
+#endif
+
+  tensor_free(res_cpu);
+  tensor_free(a_cpu);
+  tensor_free(b_cpu);
+
+#ifdef USE_CUDA
+  tensor_free(res_gpu);
+  tensor_free(a_gpu);
+  tensor_free(b_gpu);
+
+  return (cpu_ok && gpu_ok) ? 0 : 1;
+#else
+  return cpu_ok ? 0 : 1;
+#endif
 
   // Tensor *x = tensor_random(2, new int[2]{1000, 1}, DEVICE_GPU);
   // Tensor *y = tensor_sin(x);
