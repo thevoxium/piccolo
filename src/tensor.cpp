@@ -407,6 +407,9 @@ void zero_grad(Tensor *t) {
     }
 #endif
   }
+
+  t->_host_dirty = false;
+  t->_device_dirty = false;
 }
 
 void zero_graph_grad(Tensor *root) {

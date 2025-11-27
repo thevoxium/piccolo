@@ -45,6 +45,7 @@ void backward(Tensor *root) {
       cudaMemcpy(root->d_grad, ones, root->capacity * sizeof(float),
                  cudaMemcpyHostToDevice);
       delete[] ones;
+      root->_host_dirty = true;
     }
   } else
 #endif
@@ -59,6 +60,14 @@ void backward(Tensor *root) {
   for (Tensor *t : topo) {
     if (t != NULL && t->_backward) {
       t->_backward();
+      if (t->_parents != NULL) {
+        for (int i = 0; i < 2; i++) {
+          Tensor *parent = t->_parents[i];
+          if (parent != NULL && parent->device == DEVICE_GPU) {
+            parent->_host_dirty = true;
+          }
+        }
+      }
     }
   }
 }
