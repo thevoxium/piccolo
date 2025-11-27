@@ -78,7 +78,7 @@
         .content ul { margin-bottom: 1.5rem; padding-left: 1.5rem; color: #ccc; }
         .content li { margin-bottom: 0.5rem; }
         .content code { font-family: var(--f-mono); background: var(--c-code-bg); color: var(--c-accent); padding: 0.2rem 0.4rem; font-size: 0.9em; border: 1px solid var(--c-border); }
-        .content pre { background: var(--c-code-bg); padding: 1.5rem; border: 1px solid var(--c-border); border-left: 3px solid var(--c-accent); overflow-x: auto; margin: 1.5rem 0; }
+        .content pre { background: var(--c-code-bg); padding: 1.5rem; border: 1px solid var(--c-border); border-left: 3px solid var(--c-accent); overflow-x: auto; margin: 1.5rem 0; max-width: 100%; }
         .content pre code { background: transparent; padding: 0; color: inherit; border: none; }
         
         /* Buttons used in Landing */
@@ -92,6 +92,8 @@
         @media (max-width: 900px) {
             .page-grid { grid-template-columns: 1fr; }
             .sidebar { display: none; }
+            .container { padding: 0 1rem; }
+            .nav-links { display: none; } /* Mobile nav simplification */
         }
     </style>
 </head>

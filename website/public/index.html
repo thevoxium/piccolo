@@ -282,10 +282,19 @@
 
         /* --- Mobile --- */
         @media (max-width: 1024px) {
-            .grid-1-2, .grid-3 { grid-template-columns: 1fr; }
+            .grid-3 { grid-template-columns: 1fr; }
+            .grid-1-2 { grid-template-columns: 1fr; }
             .docs-container { grid-template-columns: 1fr; }
             .docs-sidebar { display: none; }
-            h1 { font-size: 4rem; }
+            h1 { font-size: 3.5rem; }
+        }
+        
+        @media (max-width: 768px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .nav-links { display: none; } /* Mobile nav not implemented yet, hiding links to fit screen */
+            .container { padding: 0 1rem; }
+            pre { overflow-x: scroll; max-width: 100%; }
+            .api-header { overflow-x: scroll; }
         }
     </style>
 </head>
