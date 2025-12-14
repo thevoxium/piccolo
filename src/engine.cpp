@@ -3,10 +3,6 @@
 #include <functional>
 #include <unordered_set>
 
-#ifdef USE_CUDA
-#include <cuda_runtime.h>
-#endif
-
 static void build_topological_order(Tensor *root, std::vector<Tensor *> &topo) {
   if (root == NULL)
     return;
@@ -29,48 +25,20 @@ static void build_topological_order(Tensor *root, std::vector<Tensor *> &topo) {
 void backward(Tensor *root) {
   if (root == NULL)
     return;
+
   std::vector<Tensor *> topo;
   build_topological_order(root, topo);
 
-  // Note: realize(root) removed - caller must ensure graph is realized before
-  // calling backward(). This avoids redundant graph traversal.
-
   // Initialize root gradient to 1.0f for each element
-#ifdef USE_CUDA
-  if (root->device == DEVICE_GPU) {
-    if (root->d_grad != NULL) {
-      float *ones = new float[root->capacity];
-      for (int i = 0; i < root->capacity; i++) {
-        ones[i] = 1.0f;
-      }
-      cudaMemcpy(root->d_grad, ones, root->capacity * sizeof(float),
-                 cudaMemcpyHostToDevice);
-      delete[] ones;
-      root->_host_dirty = true;
-      root->_device_dirty = false;
-    }
-  } else
-#endif
-  {
-    if (root->grad != NULL) {
-      for (int i = 0; i < root->capacity; i++) {
-        root->grad[i] = 1.0f;
-      }
+  if (root->grad != NULL) {
+    for (int i = 0; i < root->capacity; i++) {
+      root->grad[i] = 1.0f;
     }
   }
 
   for (Tensor *t : topo) {
     if (t != NULL && t->_backward) {
       t->_backward();
-      if (t->_parents != NULL) {
-        for (int i = 0; i < 2; i++) {
-          Tensor *parent = t->_parents[i];
-          if (parent != NULL && parent->device == DEVICE_GPU) {
-            parent->_host_dirty = true;
-            parent->_device_dirty = false;  // device just got updated
-          }
-        }
-      }
     }
   }
 }
@@ -78,6 +46,7 @@ void backward(Tensor *root) {
 void free_graph(Tensor *root) {
   if (root == NULL)
     return;
+
   std::vector<Tensor *> topo;
   build_topological_order(root, topo);
 

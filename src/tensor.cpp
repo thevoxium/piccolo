@@ -8,7 +8,7 @@
 #include <unordered_set>
 #include <vector>
 
-Tensor *tensor_create(int ndim, int *shape, Device device) {
+Tensor *tensor_create(int ndim, int *shape) {
   if (ndim <= 0 || shape == NULL) {
     ERROR_RETURN_NULL("Error: Check for ndim or shape of the tensor \n");
   }
@@ -22,19 +22,13 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
   int capacity = 1;
   for (int i = 0; i < ndim; i++) {
     if (shape[i] > 0 && capacity > INT_MAX / shape[i]) {
-      ERROR_RETURN_NULL("Error: Capcity overflow for tensor allocation\n");
+      ERROR_RETURN_NULL("Error: Capacity overflow for tensor allocation\n");
     }
     capacity *= shape[i];
   }
 
-  // Initially, I was using malloc here, it was working fine on mac locally
-  // but when run on colab, it was seg fault all over the place
-  // now i did not know the issue, what was causing it
-  // LLM suggested to use new and delete here because of the backward
-  // std::function it says since malloc/free does not call constructor and
-  // destructor, it is allocating garbage to the backward() new and delete
-  // correctly calls constructor and destructor correctly need to check this
-  // more
+  // Using new instead of malloc because std::function requires proper
+  // constructor/destructor calls
   Tensor *t = new Tensor();
   CHECK_NULL_T(t);
 
@@ -81,8 +75,6 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
   t->_backward = NULL;
   t->_forward = NULL;
   t->_realized = false;
-  t->_host_dirty = false;
-  t->_device_dirty = false;
 
   t->grad = (float *)malloc(capacity * sizeof(float));
   if (t->grad == NULL) {
@@ -95,119 +87,49 @@ Tensor *tensor_create(int ndim, int *shape, Device device) {
   }
   memset(t->grad, 0, capacity * sizeof(float));
 
-  t->device = device;
-
-  if (device == DEVICE_GPU) {
-#ifdef USE_CUDA
-    CUDA_CHECK(cudaMalloc(&t->d_data, capacity * sizeof(float)));
-    CUDA_CHECK(cudaMalloc(&t->d_grad, capacity * sizeof(float)));
-    CUDA_CHECK(cudaMemset(t->d_data, 0, capacity * sizeof(float)));
-    CUDA_CHECK(cudaMemset(t->d_grad, 0, capacity * sizeof(float)));
-#else
-    ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
-    t->device = DEVICE_CPU;
-#endif
-  }
-
   return t;
 }
 
-Tensor *tensor_ones(int ndim, int *shape, Device device) {
-  Tensor *t = tensor_create(ndim, shape, device);
+Tensor *tensor_ones(int ndim, int *shape) {
+  Tensor *t = tensor_create(ndim, shape);
   CHECK_NULL_T(t);
 
   for (int i = 0; i < t->capacity; i++) {
     t->data[i] = 1.0f;
   }
 
-  if (t->device == DEVICE_GPU) {
-#ifdef USE_CUDA
-    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float),
-                          cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
-                          cudaMemcpyHostToDevice));
-    t->_host_dirty = false;
-    t->_device_dirty = false;
-#else
-    ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
-    t->device = DEVICE_CPU;
-#endif
-  }
-
   return t;
 }
 
-Tensor *tensor_zeroes(int ndim, int *shape, Device device) {
-  Tensor *t = tensor_create(ndim, shape, device);
+Tensor *tensor_zeroes(int ndim, int *shape) {
+  Tensor *t = tensor_create(ndim, shape);
   CHECK_NULL_T(t);
 
   memset(t->data, 0, t->capacity * sizeof(float));
 
-  if (t->device == DEVICE_GPU) {
-#ifdef USE_CUDA
-    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float),
-                          cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
-                          cudaMemcpyHostToDevice));
-    t->_host_dirty = false;
-    t->_device_dirty = false;
-#else
-    ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
-    t->device = DEVICE_CPU;
-#endif
-  }
-
   return t;
 }
 
-Tensor *tensor_random(int ndim, int *shape, Device device) {
-  Tensor *t = tensor_create(ndim, shape, device);
+Tensor *tensor_random(int ndim, int *shape) {
+  Tensor *t = tensor_create(ndim, shape);
   CHECK_NULL_T(t);
 
   for (int i = 0; i < t->capacity; i++) {
     t->data[i] = (float)rand() / (float)RAND_MAX;
   }
 
-  if (t->device == DEVICE_GPU) {
-#ifdef USE_CUDA
-    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float),
-                          cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
-                          cudaMemcpyHostToDevice));
-    t->_host_dirty = false;
-    t->_device_dirty = false;
-#else
-    ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
-    t->device = DEVICE_CPU;
-#endif
-  }
-
   return t;
 }
 
-Tensor *tensor_from_data(int ndim, int *shape, float *data, Device device) {
+Tensor *tensor_from_data(int ndim, int *shape, float *data) {
   if (data == NULL) {
     ERROR_RETURN_NULL("Error: data array is NULL\n");
   }
 
-  Tensor *t = tensor_create(ndim, shape, device);
+  Tensor *t = tensor_create(ndim, shape);
   CHECK_NULL_T(t);
 
   memcpy(t->data, data, t->capacity * sizeof(float));
-
-  if (t->device == DEVICE_GPU) {
-#ifdef USE_CUDA
-    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float),
-                          cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
-                          cudaMemcpyHostToDevice));
-    t->_host_dirty = false;
-    t->_device_dirty = false;
-#else
-    ERROR_MSG("Error: GPU as Device, but build without CUDA Flag\n");
-    t->device = DEVICE_CPU;
-#endif
-  }
 
   return t;
 }
@@ -286,109 +208,7 @@ void tensor_free(Tensor *t) {
     free(t->grad);
   }
 
-  if (t->device == DEVICE_GPU) {
-#ifdef USE_CUDA
-    CUDA_CHECK(cudaFree(t->d_data));
-    CUDA_CHECK(cudaFree(t->d_grad));
-#else
-    ERROR_MSG("Error: Free, device is GPU but not build using CUDA Flag\n");
-#endif
-  }
-
   delete t;
-}
-
-void sync_to_host(Tensor *t) {
-  if (t == NULL) {
-    ERROR_MSG("Error: sync_to_host called with NULL tensor\n");
-    return;
-  }
-
-  ensure_realized(t);
-
-  if (t->device != DEVICE_GPU) {
-    // Nothing to sync - tensor is already on CPU
-    return;
-  }
-
-  if (!t->_host_dirty) {
-    // Host already has the latest view
-    return;
-  }
-
-#ifdef USE_CUDA
-  if (t->d_data != NULL && t->data != NULL) {
-    CUDA_CHECK(cudaMemcpy(t->data, t->d_data, t->capacity * sizeof(float),
-                          cudaMemcpyDeviceToHost));
-  }
-  if (t->d_grad != NULL && t->grad != NULL) {
-    CUDA_CHECK(cudaMemcpy(t->grad, t->d_grad, t->capacity * sizeof(float),
-                          cudaMemcpyDeviceToHost));
-  }
-  t->_host_dirty = false;
-  t->_device_dirty = true;
-#else
-  ERROR_MSG("Error: sync_to_host called but not built with CUDA\n");
-#endif
-}
-
-void sync_to_device(Tensor *t) {
-  if (t == NULL) {
-    ERROR_MSG("Error: sync_to_device called with NULL tensor\n");
-    return;
-  }
-
-  if (t->device != DEVICE_GPU) {
-    // Nothing to sync - tensor is on CPU only
-    return;
-  }
-
-  if (!t->_device_dirty) {
-    // Device already has the latest view
-    return;
-  }
-
-#ifdef USE_CUDA
-  if (t->data != NULL && t->d_data != NULL) {
-    CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float),
-                          cudaMemcpyHostToDevice));
-  }
-  if (t->grad != NULL && t->d_grad != NULL) {
-    CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
-                          cudaMemcpyHostToDevice));
-  }
-  t->_device_dirty = false;
-#else
-  ERROR_MSG("Error: sync_to_device called but not built with CUDA\n");
-#endif
-}
-
-void sync_graph_to_host(Tensor *root) {
-  if (root == NULL) {
-    return;
-  }
-
-  std::vector<Tensor *> topo;
-  std::unordered_set<Tensor *> visited;
-  build_topo_order(root, topo, visited);
-
-  for (Tensor *t : topo) {
-    sync_to_host(t);
-  }
-}
-
-void sync_graph_to_device(Tensor *root) {
-  if (root == NULL) {
-    return;
-  }
-
-  std::vector<Tensor *> topo;
-  std::unordered_set<Tensor *> visited;
-  build_topo_order(root, topo, visited);
-
-  for (Tensor *t : topo) {
-    sync_to_device(t);
-  }
 }
 
 void zero_grad(Tensor *t) {
@@ -399,17 +219,6 @@ void zero_grad(Tensor *t) {
   if (t->grad != NULL) {
     memset(t->grad, 0, t->capacity * sizeof(float));
   }
-
-  if (t->device == DEVICE_GPU) {
-#ifdef USE_CUDA
-    if (t->d_grad != NULL) {
-      CUDA_CHECK(cudaMemset(t->d_grad, 0, t->capacity * sizeof(float)));
-    }
-#endif
-  }
-
-  t->_host_dirty = false;
-  t->_device_dirty = false;
 }
 
 void zero_graph_grad(Tensor *root) {
@@ -423,81 +232,5 @@ void zero_graph_grad(Tensor *root) {
 
   for (Tensor *t : topo) {
     zero_grad(t);
-  }
-}
-
-// Helper to set device for a single tensor (allocates/frees GPU memory as needed)
-static void set_tensor_device(Tensor *t, Device device) {
-  if (t == NULL || t->device == device) {
-    return;
-  }
-
-  Device old_device = t->device;
-  t->device = device;
-
-  if (device == DEVICE_GPU && old_device == DEVICE_CPU) {
-    // Moving from CPU to GPU - allocate GPU memory and copy data
-#ifdef USE_CUDA
-    CUDA_CHECK(cudaMalloc(&t->d_data, t->capacity * sizeof(float)));
-    CUDA_CHECK(cudaMalloc(&t->d_grad, t->capacity * sizeof(float)));
-
-    if (t->data != NULL) {
-      CUDA_CHECK(cudaMemcpy(t->d_data, t->data, t->capacity * sizeof(float),
-                            cudaMemcpyHostToDevice));
-    } else {
-      CUDA_CHECK(cudaMemset(t->d_data, 0, t->capacity * sizeof(float)));
-    }
-
-    if (t->grad != NULL) {
-      CUDA_CHECK(cudaMemcpy(t->d_grad, t->grad, t->capacity * sizeof(float),
-                            cudaMemcpyHostToDevice));
-    } else {
-      CUDA_CHECK(cudaMemset(t->d_grad, 0, t->capacity * sizeof(float)));
-    }
-    t->_device_dirty = false;
-    t->_host_dirty = false;
-#else
-    ERROR_MSG("Error: Cannot set device to GPU - not built with CUDA\n");
-    t->device = DEVICE_CPU;
-#endif
-  } else if (device == DEVICE_CPU && old_device == DEVICE_GPU) {
-    // Moving from GPU to CPU - copy data back and free GPU memory
-#ifdef USE_CUDA
-    if (t->d_data != NULL) {
-      if (t->data != NULL) {
-        CUDA_CHECK(cudaMemcpy(t->data, t->d_data, t->capacity * sizeof(float),
-                              cudaMemcpyDeviceToHost));
-      }
-      CUDA_CHECK(cudaFree(t->d_data));
-      t->d_data = NULL;
-    }
-
-    if (t->d_grad != NULL) {
-      if (t->grad != NULL) {
-        CUDA_CHECK(cudaMemcpy(t->grad, t->d_grad, t->capacity * sizeof(float),
-                              cudaMemcpyDeviceToHost));
-      }
-      CUDA_CHECK(cudaFree(t->d_grad));
-      t->d_grad = NULL;
-    }
-    t->_host_dirty = false;
-    t->_device_dirty = false;
-#else
-    ERROR_MSG("Error: Cannot move from GPU - not built with CUDA\n");
-#endif
-  }
-}
-
-void set_graph_device(Tensor *root, Device device) {
-  if (root == NULL) {
-    return;
-  }
-
-  std::vector<Tensor *> topo;
-  std::unordered_set<Tensor *> visited;
-  build_topo_order(root, topo, visited);
-
-  for (Tensor *t : topo) {
-    set_tensor_device(t, device);
   }
 }

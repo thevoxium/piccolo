@@ -21,10 +21,6 @@
         (b)->grad == NULL) {                                                   \
       ERROR_RETURN_NULL("Error: Tensor data or grad is Null\n");               \
     }                                                                          \
-                                                                               \
-    if ((a)->device != (b)->device) {                                          \
-      ERROR_RETURN_NULL("Error: Tensor devices do not match\n");               \
-    }                                                                          \
   } while (0)
 
 Tensor *tensor_add(Tensor *a, Tensor *b);
