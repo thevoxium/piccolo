@@ -37,9 +37,6 @@ std::ostream &operator<<(std::ostream &os, const Tensor &t) {
     os << "INVALID_TENSOR";
     return os;
   }
-
-  ensure_realized(const_cast<Tensor *>(&t));
-
   const float *data = t.data;
 
   if (data == NULL) {

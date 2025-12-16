@@ -41,7 +41,6 @@ Tensor *tensor_from_data(int ndim, int *shape, float *data);
 
 // Realize the tensor and all its dependencies in the computation graph
 void realize(Tensor *t);
-void ensure_realized(Tensor *t);
 
 // Zero gradients for a single tensor
 void zero_grad(Tensor *t);

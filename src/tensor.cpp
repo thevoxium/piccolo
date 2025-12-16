@@ -178,16 +178,6 @@ void realize(Tensor *t) {
   }
 }
 
-void ensure_realized(Tensor *t) {
-  if (t == NULL) {
-    ERROR_MSG("Error: ensure_realized called with NULL tensor\n");
-    return;
-  }
-  if (!t->_realized) {
-    realize(t);
-  }
-}
-
 void tensor_free(Tensor *t) {
   if (t == NULL) {
     return;
